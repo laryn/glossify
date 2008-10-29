@@ -1,0 +1,5 @@
+; $Id$
+name = Glossify
+description = "Provides mouseovers on content in node bodies that are titles of another node type"
+core = 6.x
+
