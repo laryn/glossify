@@ -73,7 +73,7 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
     switch ($op) {
       case 'alter':
           foreach (array_keys($glossary_term) as $term) {
-            $pattern = '/(?<!\")' . $term . '/';
+            $pattern = '/\b(?<!\"|\/)' . $term . '\b/';
             switch ($glossify_style) {
               case 'links':
                 $replacement = l($term, 'node/' . $glossary_term[$term], array('attributes' => array('class' => 'glossify_term')));
@@ -89,7 +89,9 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
             if (variable_get('glossify_teaser', TRUE)) {
               $node->teaser = preg_replace($pattern, $replacement, $node->teaser, variable_get('glossify_link_first_only', true) ? 1 : -1);
             }
-            $node->body = preg_replace($pattern, $replacement, $node->body, variable_get('glossify_link_first_only', true) ? 1 : -1);
+            if ($node->nid != $glossary_term[$term]) { // don't link to myself
+              $node->body = preg_replace($pattern, $replacement, $node->body, variable_get('glossify_link_first_only', true) ? 1 : -1);
+            }
           } // endforeach looping through terms
         break; // done with $op = 'alter'
       case 'view':
