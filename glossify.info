@@ -1,5 +1,8 @@
 ; $Id$
 name = Glossify
-description = "Provides mouseovers on content in node bodies that are titles of another node type"
+description = Automatically links nodes in your site according to your settings - parses node bodies searching for titles of another nodes.
+package = Filter
+dependencies[] = node 
+dependencies[] = simplehtmldom
 core = 6.x
 

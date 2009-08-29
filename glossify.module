@@ -1,45 +1,311 @@
 <?php
 // $Id$
 
+/**
+ * Implementation of hook_menu().
+ */
 function glossify_menu() {
   $items['admin/settings/glossify'] = array(
     'title' => 'Glossify settings',
-    'description' => 'Manipulate glossify behavior',
+    'description' => 'Manipulate glossify behaviour',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('glossify_admin_settings'),
-    'access arguments' => array('administer site configuration'),
+    'access arguments' => array('administer glossify'),
   );
   return $items;
-} // endfunction glossify_menu
+}
 
+/**
+ * Implementation of hook_nodeapi().
+  - alter: alter body/teaser after all input filters
+  - view: do sth on view
+ */
+function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
+  
+  $node_type   = $node->type;
+  $node_nid    = $node->nid;
+  $node_body   = $node->body;
+  $node_teaser = $node->teaser;
+  $content_types_to_search = variable_get('glossify_content_types_to_search', node_get_types());
+  
+  // return, if we're not viewing an appropriate node
+  if (!in_array($node_type, $content_types_to_search) ) {return;}
+
+  // add css only on pages that will be parsed
+  drupal_add_css(drupal_get_path('module', 'glossify') . '/glossify.css');
+
+  $content_types_that_give_terms = variable_get('glossify_glossary_content_type', NULL);
+  
+  // return if no nodetypes that hold terms
+  if (!isset($content_types_that_give_terms)) { return; }
+  
+
+  
+  // build WHERE clause
+  foreach ($content_types_that_give_terms as $type) {
+    $clauseparts[] = 'type = "' . $type . '"';
+  }
+  
+  $whereclause = implode(' OR ', $clauseparts);
+  
+  $result = db_query('SELECT title, nid FROM {node} node WHERE ' . $whereclause);
+  while ($term = db_fetch_object($result)) { //load the $glossary_terms array
+    $glossary_terms[$term->title] = $term->nid;
+  } // endwhile looping through terms
+
+  // end build WHERE clause
+  
+  $glossify_style = variable_get('glossify_style', 'links');
+  
+  switch ($op) {
+
+    case 'alter':
+//$time = __glossify_timer_start();
+      $glossary_terms_search_for = array_keys($glossary_terms);
+      $replacements = __glossify_build_replacements($glossify_style, $glossary_terms, $node_nid);
+
+      // parse teaser
+      if (variable_get('glossify_teaser', TRUE)) {
+        $node->teaser = __glossify_parse_html_text_and_replace_terms_safely($node_teaser,$glossary_terms_search_for, $replacements);
+      }
+    
+      // body
+      $node->body = __glossify_parse_html_text_and_replace_terms_safely($node_body,$glossary_terms_search_for, $replacements);
+
+//      __glossify_timer_stop($time);
+    break; // done with $op = 'alter'
+    
+    case 'view': // used for reference section display
+    
+      switch ($glossify_style) {
+  
+        case 'links':
+          break;
+        
+        case 'reference':
+        
+          foreach ($glossary_terms as $term_title => $term_nid) {
+
+            //TODO: this is slow but right! make it fast by saving the found terms from the replacing func
+            //        if (__glossify_tell_whether_term_is_present_somewhere_in_the_html_plaintext($node_body, $term_title) ) {
+            if (preg_match('/' . preg_quote($term_title, '/') . '/', $node_body)) {
+              $term_definition_list .= theme('glossify_term', $term_nid, $glossify_style);
+            } // endif found a term to glossify
+          } // endforeach looping through terms
+        
+        case 'hovertip':
+        default:
+          foreach ($glossary_terms as $term_title => $term_nid) {
+      
+            //TODO: this is slow but right! make it fast by saving the found terms from the replacing func
+            //        if (__glossify_tell_whether_term_is_present_somewhere_in_the_html_plaintext($node_body, $term_title) ) {
+            if (preg_match('/' . preg_quote($term_title, '/') . '/', $node_body)) {
+              $node->content['glossify'][$term_title] = array(
+                '#value' => theme('glossify_term', $term_nid, $glossify_style),
+                '#weight' => 10,
+              );
+              $node->content['glossify']['#weight'] = 10;
+            } // endif found a term to glossify
+          } // endforeach looping through terms
+
+          break;
+            
+      } // endswitch glossify style
+    
+    
+      // make reference section under the node
+      if ($glossify_style == 'reference') {
+        $node->content['glossify'] = array(
+          '#weight' => '10',
+          '#value'  => theme('glossify_reference_section', $term_definition_list),
+          );
+      } // endif make reference section
+    
+      break; // break case view op
+    
+  } // endswitch $op
+} // endfunction glossify_nodeapi
+
+
+function __glossify_parse_html_text_and_replace_terms_safely($input_html,$glossary_terms_search_for, $replacements) {
+
+  // Create a simplehtmldom object
+  $html_obj = new simple_html_dom();
+  // Load HTML from a string
+  $html_obj->load($input_html);
+
+  // escape a tags - phase 1
+  $esc=-1;
+  foreach ($html_obj->find('a') as $obj) {
+    $esc++;
+    // unique marker
+    $marker = "_segesc_begin_a_tag_" . $esc . "_segesc_end_";
+    // save the real tags here to unescape later
+    $escaped_real_tags[$esc] = $obj->outertext;
+    // marker_1, marker_2, ...
+    $escaped_markers[$esc]   = $marker;
+    // the actual escaping happens
+    $obj->outertext          = $marker;
+  }
+  
+  // look only in plaintext html parts - ommit inside html tags - like in <a here> </here>
+  foreach ($html_obj->find('text') as $plain_text_obj ) {
+    if ( preg_match('/\w/', $plain_text_obj->outertext) != 1 ) { continue; } // next loop
+      
+      if (variable_get('glossify_link_first_only', TRUE) ) {// replace only one time
+      
+        foreach ($glossary_terms_search_for as $term_title) {
+          $glossary_terms_search_for_patterns[] = '/' . preg_quote($term_title, '/') . '/';
+          
+        }
+      
+        // preg replace with array args
+        $plain_text_obj->outertext = preg_replace($glossary_terms_search_for_patterns, $replacements,
+                                      $plain_text_obj->outertext, 1);
+      }
+      else {// replace all occurencies
+        // str replace with array args
+        // TODO: deal with terms into terms - basically escape new <a> tags that are added with replacements and mangled by later replacements... 
+        $plain_text_obj->outertext = str_replace($glossary_terms_search_for, $replacements,       $plain_text_obj->outertext);
+      }
+  } // end foreach plaintext chunk
+      
+  // to string
+  $html_obj_string = $html_obj->save();
+  // clear memory
+  $html_obj->clear();
+  // unescape a tags - phase 2 - ending phase
+      
+  $output = str_replace($escaped_markers, $escaped_real_tags, $html_obj_string);
+  return $output;
+}
+
+
+function __glossify_tell_whether_term_is_present_somewhere_in_the_html_plaintext($input_html,$term_title) {
+
+  // Create a DOM object
+  $html_obj = new simple_html_dom();
+  // Load HTML from a string
+  $html_obj->load($input_html);
+
+  // look only in plaintext html parts - ommit inside html tags - like in <a here> </here>
+  foreach ($html_obj->find('text') as $plain_text_obj ) {
+      if (strstr($plain_text_obj->outertext, $term_title) !== FALSE ) { 
+        $html_obj->clear();
+        return TRUE; 
+      }
+  } // end foreach plaintext chunk
+  
+  return FALSE;
+}
+
+function __glossify_build_replacements($glossify_style, $glossary_terms, $node_nid) {
+  // build replacement - needs term node title and term node id, returns replacement
+
+  foreach ($glossary_terms as $term_title => $term_nid) {
+  
+    // don't link to myself
+    if ($node_nid == $term_nid) { $replacements[] = $term_title; continue; } // next loop
+
+    switch ($glossify_style) {
+      
+      case 'links':
+        $replacements[] = l($term_title, 'node/' . $term_nid, array('attributes' => array('class' => 'glossify_term')));
+      break;
+    
+      case 'reference':
+        $replacements[] = '<span class="glossify_term">' . $term_title . '</span>';
+      break;
+
+      case 'hovertip':
+
+      default:
+        $replacements[] = '<span class="glossify_term hovertip_target" hovertip="' . $term_title . '">' . $term_title . '</span>';
+      break;
+    } // endswitch glossify style
+  }// end foreach term
+  
+  return $replacements;
+
+} // end func __glossify_build_replacements
+
+
+function __glossify_timer_start() {
+  $mtime = explode(' ', microtime() ); 
+  return $mtime[1] + $mtime[0]; 
+}
+
+function __glossify_timer_stop($starttime) {
+  $mtime = explode(' ', microtime() ); 
+  $endtime = $mtime[1] + $mtime[0]; 
+  echo '<br>This page was created in ' . ($endtime - $starttime) . ' seconds.'; 
+}
+
+
+
+/**
+ * Render a glossary term.
+ */
+function theme_glossify_term($nid, $glossify_style) { // outputs proper div so hovertip will work
+  $term = node_load($nid);
+  switch ($glossify_style) {
+    case 'reference':
+      $output = '<dt>' . $term->title . '</dt>';
+      $output .= '<dd>' . $term ->body . '</dd>';
+      break;
+    case 'hovertip':
+    default:
+      $output = '<div id="' . $term->title . '" class="hovertip" style="display: none;">';
+      // Output a DIV to make hovertip work.
+      $output .= '<h1>' . $term->title . '</h1>';
+      $output .= '<p>' . $term->body . '</p>';
+      $output .= '</div>';
+      break;
+  } // endswitch glossify style
+  return $output;
+}
+
+
+
+
+
+
+
+/**
+ * Implementation of hook_perm().
+ */
 function glossify_perm() {
   return array('administer glossify');
-} // endfunction glossify_perm
+}
 
+
+/**
+ * Form builder for administrative settings.
+ */
 function glossify_admin_settings() {
   $form['glossify_glossary_content_type'] = array(
     '#type' => 'select',
     '#title' => t('Content types holding glossary terms'),
-    '#multiple' => true,
+    '#multiple' => TRUE,
     '#options' => node_get_types('names'),
     '#default_value' => variable_get('glossify_glossary_content_type', ''),
     );
   $form['glossify_content_types_to_search'] = array(
     '#type' => 'select',
     '#title' => t('Search the content of these types'),
-    '#multiple' => true,
+    '#multiple' => TRUE,
     '#options' => node_get_types('names'),
     '#default_value' => variable_get('glossify_content_types_to_search', ''),
   );
   $form['glossify_link_first_only'] = array(
     '#type' => 'checkbox',
     '#title' => t('Only link first occurance of term'),
-    '#default_value' => variable_get('glossify_link_first_only', true),
+    '#default_value' => variable_get('glossify_link_first_only', TRUE),
   );
   $form['glossify_teaser'] = array(
     '#type' => 'checkbox',
     '#title' => t('Link content in teaser'),
-    '#default_value' => variable_get('glossify_teaser', true),
+    '#default_value' => variable_get('glossify_teaser', TRUE),
   );
   $form['glossify_style'] = array(
     '#type' => 'select',
@@ -53,120 +319,36 @@ function glossify_admin_settings() {
     '#description' => t('How the glossary should be styled. Note: "hovertip" style requires hovertip.module.'),
   );
 
+  // Add default buttons to a form and set its prefix.
+  // then return it to the page callback of the menu (drupal_get_form)
   return system_settings_form($form);
 }
 
-function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
-  if (in_array($node->type, variable_get('glossify_content_types_to_search', node_get_types()))) { // rendering the right type of node
-    drupal_add_css(drupal_get_path('module', 'glossify') . '/glossify.css');
-    $types = variable_get('glossify_glossary_content_type', NULL);
-    if (isset($types)) {
-      $glossify_style = variable_get('glossify_style', 'links');
-      foreach ($types as $type) { // build WHERE clause
-        $clauseparts[] = 'type = "' . $type . '"';
-      }
-      $whereclause = implode(' OR ', $clauseparts);
-      $result = db_query('SELECT title, nid FROM {node} n WHERE ' . $whereclause);
-      while ($term = db_fetch_object($result)) { //load the $glossary_term array
-        $glossary_term[$term->title] = $term->nid;
-      } // endwhile looping through terms
-    switch ($op) {
-      case 'alter':
-          foreach (array_keys($glossary_term) as $term) {
-            $pattern = '/\b(?<!\"|\/)' . preg_quote($term, '/') . '\b/';
-            switch ($glossify_style) {
-              case 'links':
-                $replacement = l($term, 'node/' . $glossary_term[$term], array('attributes' => array('class' => 'glossify_term')));
-                break;
-              case 'reference':
-                $replacement = '<span class="glossify_term">' . $term . '</span>';
-                break;
-              case 'hovertip':
-              default:
-                $replacement = '<span class="glossify_term hovertip_target" hovertip="' . $term . '">' . $term . '</span>';
-                break;
-            } // endswitch glossify style
-            if (variable_get('glossify_teaser', TRUE)) {
-              $node->teaser = preg_replace($pattern, $replacement, $node->teaser, variable_get('glossify_link_first_only', true) ? 1 : -1);
-            }
-            if ($node->nid != $glossary_term[$term]) { // don't link to myself
-              $node->body = preg_replace($pattern, $replacement, $node->body, variable_get('glossify_link_first_only', true) ? 1 : -1);
-            }
-          } // endforeach looping through terms
-        break; // done with $op = 'alter'
-      case 'view':
-        foreach (array_keys($glossary_term) as $term) {
-          if (preg_match('/' . preg_quote($term, '/') . '/', $node->body)) { // got one
-            switch ($glossify_style) {
-              case 'links':
-                break;
-              case 'reference':
-                $term_definition_list .= theme('glossify_term', $glossary_term[$term], $glossify_style);
-              case 'hovertip':
-              default:
-                $node->content['glossify'][$term] = array(
-                  '#value' => theme('glossify_term', $glossary_term[$term], $glossify_style),
-                  '#weight' => 10,
-                );
-                $node->content['glossify']['#weight'] = 10;
-                break;
-              } // endswitch glossify style
-          } // endif found a term to glossify
-        } // endforeach looping through terms
-        if ($glossify_style == 'reference') { // make reference section under the node
-          $node->content['glossify'] = array(
-            '#weight' => '10',
-            '#value'  => theme('glossify_reference_section', $term_definition_list),
-            );
-        } // endif make reference section
-      } // endswitch $op
-    } // endif there is a glossary type to search for
-  } // if we're viewing an appropriate node
-} // endfunction glossify_nodeapi
-
+/**
+ * Implementation of hook_theme().
+ */
 function glossify_theme() {
   return array(
     'glossify_term' => array(
-      'arguments' => array(
-        'nid' => NULL,
-        'glossify_style' => NULL,
-      ),
+      'arguments' => array('nid' => NULL, 'glossify_style' => NULL),
     ),
     'glossify_reference_section' => array(
-      'arguments' => array(
-        'term_definition_list' => NULL,
-      ),
+      'arguments' => array('term_definition_list' => NULL),
     ),
   );
 } // endfunction glossify_theme
 
-function theme_glossify_term($nid, $glossify_style) { // outputs proper div so hovertip will work
-  $term = node_load($nid);
-  switch ($glossify_style) {
-    case 'reference':
-      $output  = '<dt>' . $term->title . '</dt>';
-      $output .= '<dd>' . $term ->body . '</dd>';
-      break;
-    case 'hovertip':
-    default:
-      $output  = '<div id="' . $term->title . '" class="hovertip" style="display: none;">';
-      $output .= '<h1>' . $term->title . '</h1>';
-      $output .= '<p>' . $term->body . '</p>';
-      $output .= '</div><!-- glossifyterm -->';
-      break;
-  } // endswitch glossify style
-  return $output;
-} // endfunction theme_glossify_term
 
+/**
+ * Render a glossary term reference.
+ */
 function theme_glossify_reference_section($term_definition_list) {
-  $output  = '<div id="glossify-reference">';
+  $output = '<div id="glossify-reference">';
   $output .= '<h3>Terms referenced:</h3>';
   $output .= '<dl>';
   $output .= $term_definition_list;
   $output .= '</dl>';
-  $output .= '</div><!-- glossify-reference -->';
+  $output .= '</div>';
   return $output;
 }
-
-// vim: tw=300 nowrap syn=php
 
