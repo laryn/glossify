@@ -202,10 +202,13 @@ function __glossify_tell_whether_term_is_present_somewhere_in_the_html_plaintext
 function __glossify_build_replacements($glossify_style, $glossary_terms, $node_nid) {
   // build replacement - needs term node title and term node id, returns replacement
 
+  $node       = node_load($node_nid);
+  $node_title = $node->title;
+
   foreach ($glossary_terms as $term_title => $term_nid) {
   
-    // don't link to myself
-    if ($node_nid == $term_nid) { $replacements[] = $term_title; continue; } // next loop
+    // don't link to myself - just replace the term with itself (without a link - just string)
+    if ( $term_title == $node_title ) { $replacements[] = $term_title; continue; } // next loop
 
     switch ($glossify_style) {
       
