@@ -1,6 +1,6 @@
 $Id$
 
-glossify.module -- Link nodes with text to nodes with titles that are terms
+glossify.module -- Autolink nodes with text (e.g. articles) to other nodes (usually one-word-title articles)
 ---------------------------------------------------------------------------
 
 Autors
