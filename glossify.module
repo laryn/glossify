@@ -15,6 +15,7 @@ function glossify_menu() {
   return $items;
 }
 
+
 /**
  * Implementation of hook_nodeapi().
   - alter: alter body/teaser after all input filters
@@ -48,12 +49,17 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
   
   $whereclause = implode(' OR ', $clauseparts);
   
+  // WHERE class ready
+  
+  // get terms from DB
   $result = db_query('SELECT title, nid FROM {node} node WHERE ' . $whereclause);
   while ($term = db_fetch_object($result)) { //load the $glossary_terms array
     $glossary_terms[$term->title] = $term->nid;
   } // endwhile looping through terms
-
-  // end build WHERE clause
+  
+  
+    // sort the array by string length - long strings first
+  uksort($glossary_terms, "__glossify_sort_array_by_keys_string_length_cmp");
   
   $glossify_style = variable_get('glossify_style', 'links');
   
@@ -61,6 +67,7 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
 
     case 'alter':
 //$time = __glossify_timer_start();
+//print_r($glossary_terms);
       $glossary_terms_search_for = array_keys($glossary_terms);
       $replacements = __glossify_build_replacements($glossify_style, $glossary_terms, $node_nid);
 
@@ -127,6 +134,70 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
 } // endfunction glossify_nodeapi
 
 
+
+// works only for equal length arrays
+function __glossify_str_replace_once($needles , $replacements , $haystack) {
+  // Looks for the first occurence of $needle in $haystack
+  // and replaces it with $replace.
+  $i = -1;
+  foreach ($needles as $needle_el) {
+    $i++;
+    $pos = strpos($haystack, $needle_el);
+    // if nothing found, next loop
+    if ($pos === FALSE) { continue; }
+    // else
+    $haystack = substr_replace($haystack, $replacements[$i], $pos, strlen($needle_el));
+  }
+  
+  return $haystack;
+}
+
+
+function __glossify_convert_string_array_to_array_of_escaped_regexps($needles) {
+  foreach ($needles as $needle) {
+    $regexps[] = "/\b" . preg_quote($needle, "/") . "\b/";
+  }
+
+  return $regexps;
+}
+
+
+function __glossify_replace($needles, $replacements, $haystack) {
+  
+  if (variable_get('glossify_dont_break_words', TRUE) ) {
+
+    // replace only one time
+    if (variable_get('glossify_link_first_only', TRUE) ) {
+      $number_of_replacements = 1;
+    }
+    else {
+      $number_of_replacements = -1;
+    }
+
+      $haystack = preg_replace( __glossify_convert_string_array_to_array_of_escaped_regexps($needles), $replacements, $haystack, $number_of_replacements);
+  
+  }
+  else { // uses str_replace for performance
+
+    // replace only one time
+    if (variable_get('glossify_link_first_only', TRUE) ) {
+      // replace only 1st occurence
+      // this is a str_replace with array args
+      $haystack = __glossify_str_replace_once($needles, $replacements, $haystack);
+    }
+    else {
+      // replace all occurencies
+      // str replace with array args
+      $haystack = str_replace($needles, $replacements, $haystack);
+    }
+  
+  }
+  
+  return $haystack;
+}
+
+
+
 function __glossify_parse_html_text_and_replace_terms_safely($input_html,$glossary_terms_search_for, $replacements) {
 
   // Create a simplehtmldom object
@@ -134,51 +205,58 @@ function __glossify_parse_html_text_and_replace_terms_safely($input_html,$glossa
   // Load HTML from a string
   $html_obj->load($input_html);
 
+  
+  
+ 
+  
+  
+  
   // escape a tags - phase 1
-  $esc=-1;
+  $i=-1;
   foreach ($html_obj->find('a') as $obj) {
-    $esc++;
-    // unique marker
-    $marker = "_segesc_begin_a_tag_" . $esc . "_segesc_end_";
-    // save the real tags here to unescape later
-    $escaped_real_tags[$esc] = $obj->outertext;
-    // marker_1, marker_2, ...
-    $escaped_markers[$esc]   = $marker;
+    $i++;
+    $a_marker = "<!--[_a_" . $i . "_a_]-->"; // so they are now html-tags and get packed into them
+    $a_markers[$i]   = $a_marker;
+    // save the real tags' text now - so you can unescape them later
+    $a_unescaped[$i] = $obj->outertext;
     // the actual escaping happens
-    $obj->outertext          = $marker;
+    $obj->outertext          = $a_marker;
   }
   
-  // look only in plaintext html parts - ommit inside html tags - like in <a here> </here>
+
+  
+// moga da zalepq vsi4ki pt_strings sys nomerca mejdu tqh - v string - da go parsna  i da go razdelq pak!
+  // stick together
+  $glue = "[_p__p_]";
+  $plain_text_string = implode($glue, $html_obj->find('text'));
+////////////////////
+  // do string replace - only 1st OR all occurencies
+  $plain_text_string = __glossify_replace($glossary_terms_search_for, $replacements, $plain_text_string);
+  
+  // todo - copu a-tag voce to repl fiunc
+  //tofo - unescape replacements
+  
+  $plain_text_objects_array = explode($glue, $plain_text_string);
+  
+  $i = -1;
   foreach ($html_obj->find('text') as $plain_text_obj ) {
-    if ( preg_match('/\w/', $plain_text_obj->outertext) != 1 ) { continue; } // next loop
-      
-      if (variable_get('glossify_link_first_only', TRUE) ) {// replace only one time
-      
-        foreach ($glossary_terms_search_for as $term_title) {
-          $glossary_terms_search_for_patterns[] = '/' . preg_quote($term_title, '/') . '/';
-          
-        }
-      
-        // preg replace with array args
-        $plain_text_obj->outertext = preg_replace($glossary_terms_search_for_patterns, $replacements,
-                                      $plain_text_obj->outertext, 1);
-      }
-      else {// replace all occurencies
-        // str replace with array args
-        // TODO: deal with terms into terms - basically escape new <a> tags that are added with replacements and mangled by later replacements... 
-        $plain_text_obj->outertext = str_replace($glossary_terms_search_for, $replacements,       $plain_text_obj->outertext);
-      }
+    $i++;
+    $plain_text_obj->outertext = $plain_text_objects_array[$i] ;
+  
   } // end foreach plaintext chunk
-      
-  // to string
+
+  
+  // convert obj to string
   $html_obj_string = $html_obj->save();
+
   // clear memory
   $html_obj->clear();
-  // unescape a tags - phase 2 - ending phase
-      
-  $output = str_replace($escaped_markers, $escaped_real_tags, $html_obj_string);
-  return $output;
+
+  // unescape a tags - phase 2 - ending phase - 
+  // then return the parsed_html
+  return str_replace($a_markers, $a_unescaped, $html_obj_string);
 }
+
 
 
 function __glossify_tell_whether_term_is_present_somewhere_in_the_html_plaintext($input_html,$term_title) {
@@ -198,6 +276,16 @@ function __glossify_tell_whether_term_is_present_somewhere_in_the_html_plaintext
   
   return FALSE;
 }
+
+
+function __glossify_sort_array_by_keys_string_length_cmp($str1, $str2) {
+  $strlen_1 = strlen($str1);
+  $strlen_2 = strlen($str2);
+  
+  if ($strlen_1 == $strlen_2 ) { return 0; }
+  return ($strlen_1 > $strlen_2) ? -1 : 1;
+}
+
 
 function __glossify_build_replacements($glossify_style, $glossary_terms, $node_nid) {
   // build replacement - needs term node title and term node id, returns replacement
@@ -238,47 +326,11 @@ function __glossify_timer_start() {
   return $mtime[1] + $mtime[0]; 
 }
 
+
 function __glossify_timer_stop($starttime) {
   $mtime = explode(' ', microtime() ); 
   $endtime = $mtime[1] + $mtime[0]; 
   echo '<br>This page was created in ' . ($endtime - $starttime) . ' seconds.'; 
-}
-
-
-
-/**
- * Render a glossary term.
- */
-function theme_glossify_term($nid, $glossify_style) { // outputs proper div so hovertip will work
-  $term = node_load($nid);
-  switch ($glossify_style) {
-    case 'reference':
-      $output = '<dt>' . $term->title . '</dt>';
-      $output .= '<dd>' . $term ->body . '</dd>';
-      break;
-    case 'hovertip':
-    default:
-      $output = '<div id="' . $term->title . '" class="hovertip" style="display: none;">';
-      // Output a DIV to make hovertip work.
-      $output .= '<h1>' . $term->title . '</h1>';
-      $output .= '<p>' . $term->body . '</p>';
-      $output .= '</div>';
-      break;
-  } // endswitch glossify style
-  return $output;
-}
-
-
-
-
-
-
-
-/**
- * Implementation of hook_perm().
- */
-function glossify_perm() {
-  return array('administer glossify');
 }
 
 
@@ -326,6 +378,40 @@ function glossify_admin_settings() {
   // then return it to the page callback of the menu (drupal_get_form)
   return system_settings_form($form);
 }
+
+
+
+/**
+ * Implementation of hook_perm().
+ */
+function glossify_perm() {
+  return array('administer glossify');
+}
+
+
+
+/**
+ * Render a glossary term.
+ */
+function theme_glossify_term($nid, $glossify_style) { // outputs proper div so hovertip will work
+  $term = node_load($nid);
+  switch ($glossify_style) {
+    case 'reference':
+      $output = '<dt>' . $term->title . '</dt>';
+      $output .= '<dd>' . $term ->body . '</dd>';
+      break;
+    case 'hovertip':
+    default:
+      $output = '<div id="' . $term->title . '" class="hovertip" style="display: none;">';
+      // Output a DIV to make hovertip work.
+      $output .= '<h1>' . $term->title . '</h1>';
+      $output .= '<p>' . $term->body . '</p>';
+      $output .= '</div>';
+      break;
+  } // endswitch glossify style
+  return $output;
+}
+
 
 /**
  * Implementation of hook_theme().
