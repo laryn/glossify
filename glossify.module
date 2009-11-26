@@ -339,20 +339,22 @@ function __glossify_timer_stop($starttime) {
  * Form builder for administrative settings.
  */
 function glossify_admin_settings() {
-  $form['glossify_glossary_content_type'] = array(
-    '#type' => 'select',
-    '#title' => t('Content types holding glossary terms'),
-    '#multiple' => TRUE,
-    '#options' => node_get_types('names'),
-    '#default_value' => variable_get('glossify_glossary_content_type', ''),
-    );
   $form['glossify_content_types_to_search'] = array(
     '#type' => 'select',
-    '#title' => t('Search the content of these types'),
+    '#title' => t('"Link-FROM" content types - We look for keywords into their text and replace them with links'),
     '#multiple' => TRUE,
     '#options' => node_get_types('names'),
     '#default_value' => variable_get('glossify_content_types_to_search', ''),
   );
+  
+  $form['glossify_glossary_content_type'] = array(
+    '#type' => 'select',
+    '#title' => t('"Link-TO" content types. (node-title = keyword)'),
+    '#multiple' => TRUE,
+    '#options' => node_get_types('names'),
+    '#default_value' => variable_get('glossify_glossary_content_type', ''),
+    );
+    
   $form['glossify_link_first_only'] = array(
     '#type' => 'checkbox',
     '#title' => t('Only link first occurance of term. On by default. If unchecked all occurences are replaced.'),
