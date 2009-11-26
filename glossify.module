@@ -166,7 +166,7 @@ function __glossify_replace($needles, $replacements, $haystack) {
   
   if (variable_get('glossify_dont_break_words', TRUE) ) {
 
-    // replace only one time
+    // replace only one time ...
     if (variable_get('glossify_link_first_only', TRUE) ) {
       $number_of_replacements = 1;
     }
