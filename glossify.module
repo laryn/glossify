@@ -66,7 +66,7 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
   switch ($op) {
 
     case 'alter':
-//$time = __glossify_timer_start();
+if (variable_get('glossify_display_parsing_time_for_performance_debugging', FALSE) ) {$time = __glossify_timer_start(); }
 //print_r($glossary_terms);
       $glossary_terms_search_for = array_keys($glossary_terms);
       $replacements = __glossify_build_replacements($glossify_style, $glossary_terms, $node_nid);
@@ -79,7 +79,8 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
       // body
       $node->body = __glossify_parse_html_text_and_replace_terms_safely($node_body,$glossary_terms_search_for, $replacements);
 
-//      __glossify_timer_stop($time);
+if (variable_get('glossify_display_parsing_time_for_performance_debugging', FALSE) ) {__glossify_timer_stop($time); }
+
     break; // done with $op = 'alter'
     
     case 'view': // used for reference section display
@@ -330,7 +331,7 @@ function __glossify_timer_start() {
 function __glossify_timer_stop($starttime) {
   $mtime = explode(' ', microtime() ); 
   $endtime = $mtime[1] + $mtime[0]; 
-  echo '<br>This page was created in ' . ($endtime - $starttime) . ' seconds.'; 
+  echo '<br>This page was parsed by Glossify in ' . ($endtime - $starttime) . ' seconds.'; 
 }
 
 
@@ -354,7 +355,7 @@ function glossify_admin_settings() {
   );
   $form['glossify_link_first_only'] = array(
     '#type' => 'checkbox',
-    '#title' => t('Only link first occurance of term'),
+    '#title' => t('Only link first occurance of term. On by default. If unchecked all occurences are replaced.'),
     '#default_value' => variable_get('glossify_link_first_only', TRUE),
   );
   $form['glossify_teaser'] = array(
@@ -364,16 +365,32 @@ function glossify_admin_settings() {
   );
   $form['glossify_style'] = array(
     '#type' => 'select',
-    '#title' => t('Style of glossary terms'),
+    '#title' => t('Style of glossary terms.'),
     '#options' => array(
       'hovertip' => t('Hovertips'),
       'links'     => t('Links'),
       'reference' => t('Reference section under content'),
     ),
     '#default_value' => variable_get('glossify_style', 'hovertip'),
-    '#description' => t('How the glossary should be styled. Note: "hovertip" style requires hovertip.module.'),
+    '#description' => t('How the glossary should be styled. Note: "hovertip" style requires hovertip.module. If you choose anything other than links - it should work but for now it is untested territory - feedback welcome.'),
   );
 
+  
+  $form['glossify_dont_break_words'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Check this to NOT break words. This means that the keyword "bla" will not linkify the bla-part of "blade". We use this regexp to make this work: "/\b$keyword_term\b/".'),
+    '#default_value' => variable_get('glossify_dont_break_words', TRUE),
+  );
+
+
+  $form['glossify_display_parsing_time_for_performance_debugging'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Show a small debug timer at top of glossify-parsed pages. Off by default.'),
+    '#default_value' => variable_get('glossify_display_parsing_time_for_performance_debugging', FALSE),
+  );  
+
+  // glossify_use_this_cck_field_for_keyword_synonyms
+  
   // Add default buttons to a form and set its prefix.
   // then return it to the page callback of the menu (drupal_get_form)
   return system_settings_form($form);
