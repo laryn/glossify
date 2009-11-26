@@ -207,11 +207,6 @@ function __glossify_parse_html_text_and_replace_terms_safely($input_html,$glossa
   $html_obj->load($input_html);
 
   
-  
- 
-  
-  
-  
   // escape a tags - phase 1
   $i=-1;
   foreach ($html_obj->find('a') as $obj) {
@@ -226,16 +221,30 @@ function __glossify_parse_html_text_and_replace_terms_safely($input_html,$glossa
   
 
   
-// moga da zalepq vsi4ki pt_strings sys nomerca mejdu tqh - v string - da go parsna  i da go razdelq pak!
-  // stick together
+  // implode-explode all-in-one-go parsing
+  // 1. stick together
   $glue = "[_p__p_]";
   $plain_text_string = implode($glue, $html_obj->find('text'));
-////////////////////
-  // do string replace - only 1st OR all occurencies
-  $plain_text_string = __glossify_replace($glossary_terms_search_for, $replacements, $plain_text_string);
+
+  // escape replacements - so that link-to-places that are substring of other ltp-s do not cause...
+  // the a-tag into a-tag situation
   
-  // todo - copu a-tag voce to repl fiunc
-  //tofo - unescape replacements
+   // escape replacements
+  $i=-1;
+  foreach ($replacements as $replacement) {
+    $i++;
+    $repl_marker = "[_r_" . $i . "_r_]";
+    $repl_markers[$i]   = $repl_marker;
+    // save the real strings now - so you can unescape them later
+    $repl_unescaped[$i] = $replacement;
+    // the actual escaping happens just below
+  }
+  
+  // do string replace - only 1st OR all occurencies
+  $plain_text_string = __glossify_replace($glossary_terms_search_for, $repl_markers, $plain_text_string);
+  
+  //unescape replacements
+  $plain_text_string = str_replace($repl_markers, $repl_unescaped, $plain_text_string);
   
   $plain_text_objects_array = explode($glue, $plain_text_string);
   
@@ -389,7 +398,7 @@ function glossify_admin_settings() {
     '#type' => 'checkbox',
     '#title' => t('Show a small debug timer at top of glossify-parsed pages. Off by default.'),
     '#default_value' => variable_get('glossify_display_parsing_time_for_performance_debugging', FALSE),
-  );  
+  );
 
   // glossify_use_this_cck_field_for_keyword_synonyms
   
