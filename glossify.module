@@ -171,14 +171,18 @@ function __glossify_convert_string_array_to_array_of_escaped_regexps($needles) {
 
 
 function __glossify_replace($needles, $replacements, $haystack) {
-  
+
+  // take care of htmlentities so that the replacements can happen
+  $haystack = html_entity_decode($haystack, ENT_COMPAT, "UTF-8");
+  // use regexp?
   if (variable_get('glossify_dont_break_words', TRUE) ) {
 
-    // replace only one time ...   ...
+    // replace only one time?
     if (variable_get('glossify_link_first_only', TRUE) ) {
       $number_of_replacements = 1;
     }
     else {
+      // all
       $number_of_replacements = -1;
     }
 
@@ -201,6 +205,11 @@ function __glossify_replace($needles, $replacements, $haystack) {
   
   }
   
+
+// escape again the htmlentities - useful for non autolinked characters - so they are returned to their previous html-entities-state 
+// (autolinked chars are whatever the link-to titles/strings are ...)
+  $haystack = htmlentities($haystack, ENT_COMPAT, "UTF-8");
+
   return $haystack;
 }
 
@@ -247,7 +256,7 @@ function __glossify_parse_html_text_and_replace_terms_safely($input_html, $gloss
     // the actual escaping happens just below
   }
   
-  // do string replace - only 1st OR all occurencies
+  // do string or preg replace - only 1st OR all occurencies - all depends on the settings of the module
   $plain_text_string = __glossify_replace($glossary_terms_search_for, $repl_markers, $plain_text_string);
   
   //unescape replacements
