@@ -30,7 +30,9 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
   $content_types_to_search = variable_get('glossify_content_types_to_search', node_get_types());
   
   // return, if we're not viewing an appropriate node
-  if (!in_array($node_type, $content_types_to_search) ) {return;}
+  if (!in_array($node_type, $content_types_to_search) ) {
+    return;
+  }
 
   // add css only on pages that will be parsed
   drupal_add_css(drupal_get_path('module', 'glossify') . '/glossify.css');
@@ -38,9 +40,9 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
   $content_types_that_give_terms = variable_get('glossify_glossary_content_type', NULL);
   
   // return if no nodetypes that hold terms
-  if (!isset($content_types_that_give_terms)) { return; }
-  
-
+  if (!isset($content_types_that_give_terms)) {
+    return; 
+  }
   
   // build WHERE clause
   foreach ($content_types_that_give_terms as $type) {
@@ -73,11 +75,11 @@ if (variable_get('glossify_display_parsing_time_for_performance_debugging', FALS
 
       // parse teaser
       if (variable_get('glossify_teaser', TRUE)) {
-        $node->teaser = __glossify_parse_html_text_and_replace_terms_safely($node_teaser,$glossary_terms_search_for, $replacements);
+        $node->teaser = __glossify_parse_html_text_and_replace_terms_safely($node_teaser, $glossary_terms_search_for, $replacements);
       }
     
       // body
-      $node->body = __glossify_parse_html_text_and_replace_terms_safely($node_body,$glossary_terms_search_for, $replacements);
+      $node->body = __glossify_parse_html_text_and_replace_terms_safely($node_body, $glossary_terms_search_for,  $replacements);
 
 if (variable_get('glossify_display_parsing_time_for_performance_debugging', FALSE) ) {__glossify_timer_stop($time); }
 
@@ -137,7 +139,7 @@ if (variable_get('glossify_display_parsing_time_for_performance_debugging', FALS
 
 
 // works only for equal length arrays
-function __glossify_str_replace_once($needles , $replacements , $haystack) {
+function __glossify_str_replace_once($needles, $replacements, $haystack) {
   // Looks for the first occurence of $needle in $haystack
   // and replaces it with $replace.
   $i = -1;
@@ -145,7 +147,9 @@ function __glossify_str_replace_once($needles , $replacements , $haystack) {
     $i++;
     $pos = strpos($haystack, $needle_el);
     // if nothing found, next loop
-    if ($pos === FALSE) { continue; }
+    if ($pos === FALSE) {
+      continue;
+    }
     // else
     $haystack = substr_replace($haystack, $replacements[$i], $pos, strlen($needle_el));
   }
@@ -156,7 +160,10 @@ function __glossify_str_replace_once($needles , $replacements , $haystack) {
 
 function __glossify_convert_string_array_to_array_of_escaped_regexps($needles) {
   foreach ($needles as $needle) {
-    $regexps[] = "/\b" . preg_quote($needle, "/") . "\b/";
+//    $regexps[] = "/\b" . preg_quote($needle, "/") . "\b/";
+// this below is Unicode compatible
+   $regexps[] = "/(?<!\p{L})" . preg_quote($needle, "/") . "(?!\p{L})/u";
+
   }
 
   return $regexps;
@@ -199,7 +206,7 @@ function __glossify_replace($needles, $replacements, $haystack) {
 
 
 
-function __glossify_parse_html_text_and_replace_terms_safely($input_html,$glossary_terms_search_for, $replacements) {
+function __glossify_parse_html_text_and_replace_terms_safely($input_html, $glossary_terms_search_for, $replacements) {
 
   // Create a simplehtmldom object
   $html_obj = new simple_html_dom();
@@ -269,7 +276,7 @@ function __glossify_parse_html_text_and_replace_terms_safely($input_html,$glossa
 
 
 
-function __glossify_tell_whether_term_is_present_somewhere_in_the_html_plaintext($input_html,$term_title) {
+function __glossify_tell_whether_term_is_present_somewhere_in_the_html_plaintext($input_html, $term_title) {
 
   // Create a DOM object
   $html_obj = new simple_html_dom();
@@ -292,7 +299,9 @@ function __glossify_sort_array_by_keys_string_length_cmp($str1, $str2) {
   $strlen_1 = strlen($str1);
   $strlen_2 = strlen($str2);
   
-  if ($strlen_1 == $strlen_2 ) { return 0; }
+  if ($strlen_1 == $strlen_2 ) {
+    return 0;
+  }
   return ($strlen_1 > $strlen_2) ? -1 : 1;
 }
 
@@ -306,7 +315,9 @@ function __glossify_build_replacements($glossify_style, $glossary_terms, $node_n
   foreach ($glossary_terms as $term_title => $term_nid) {
   
     // don't link to myself - just replace the term with itself (without a link - just string)
-    if ( $term_title == $node_title ) { $replacements[] = $term_title; continue; } // next loop
+    if ( $term_title == $node_title ) {
+      $replacements[] = $term_title; continue; 
+    } // next loop
 
     switch ($glossify_style) {
       
