@@ -159,13 +159,20 @@ function __glossify_str_replace_once($needles, $replacements, $haystack) {
 
 
 function __glossify_convert_string_array_to_array_of_escaped_regexps($needles) {
-  foreach ($needles as $needle) {
-//    $regexps[] = "/\b" . preg_quote($needle, "/") . "\b/";
-// this below is Unicode compatible
-   $regexps[] = "/(?<!\p{L})" . preg_quote($needle, "/") . "(?!\p{L})/u";
 
+  if (variable_get('glossify_do_we_need_unicode_compatibility', TRUE) ) {
+    foreach ($needles as $needle) {
+      // this below is Unicode compatible
+      $regexps[] = "/(?<!\p{L})" . preg_quote($needle, "/") . "(?!\p{L})/u";
+    }
   }
-
+  // only latin
+  else {
+    foreach ($needles as $needle) {
+     // this below is only-latin chars compatible
+       $regexps[] = "/\b" . preg_quote($needle, "/") . "\b/";
+    }
+  }
   return $regexps;
 }
 
@@ -174,7 +181,8 @@ function __glossify_replace($needles, $replacements, $haystack) {
 
   // take care of htmlentities so that the replacements can happen
   $haystack = html_entity_decode($haystack, ENT_COMPAT, "UTF-8");
-  // use regexp?
+
+  // use regexp? (forced by the don't break words option)
   if (variable_get('glossify_dont_break_words', TRUE) ) {
 
     // replace only one time?
@@ -389,6 +397,14 @@ function glossify_admin_settings() {
     '#title' => t('Only link first occurance of term. On by default. If unchecked all occurences are replaced.'),
     '#default_value' => variable_get('glossify_link_first_only', TRUE),
   );
+
+  $form['glossify_do_we_need_unicode_compatibility'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Do we need Unicode compatibility?. Check this if you need Unicode support. If not checked, non-latin words would not get autolinked.<br>
+                   If you get php warnings with this setting=On - then please update/fix your PCRE PHP-library.'),
+    '#default_value' => variable_get('glossify_do_we_need_unicode_compatibility', TRUE),
+  );
+
   $form['glossify_teaser'] = array(
     '#type' => 'checkbox',
     '#title' => t('Link content in teaser'),
