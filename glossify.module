@@ -48,14 +48,14 @@ function _glossify_build_dictionary_of_link_to_terms() {
   
   // get terms from DB
   $result = db_query("SELECT title, nid FROM {node} node WHERE $where_clause");
-  while ($term = db_fetch_object($result)) { //load the $glossary_terms array
+  while ($term = db_fetch_object($result)) {
     $glossify_dict[$term->title] = $term->nid;
-  } // endwhile looping through terms
+  } 
   // sort the array by string length - long strings first
-  uksort($glossify_dict, "__glossify_sort_array_by_keys_string_length_cmp");
-
-  $glossify_dict_titles = array_keys($glossify_dict);
-
+  if (!empty($glossify_dict) ) {
+    uksort($glossify_dict, "__glossify_sort_array_by_keys_string_length_cmp");
+    $glossify_dict_titles = array_keys($glossify_dict);
+  }
 
 }
 
