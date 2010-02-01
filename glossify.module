@@ -16,20 +16,63 @@ function glossify_menu() {
 }
 
 
+/**
+ * This procedure gathers all link-to terms into an array that is made global.
+ * It has node-titles as its keys and nids as values.
+ * It is sorted by strlen of the keys(titles).
+ */
+
+function _glossify_build_dictionary_of_link_to_terms() {
+  global $glossify_dict;
+  global $glossify_dict_titles;
+
+  if (!empty($glossify_dict) ) { return; }
+
+  $content_types_that_give_terms = variable_get('glossify_glossary_content_type', NULL);
+  
+  // return if no nodetypes that hold terms
+  if (!isset($content_types_that_give_terms)) {
+    return;
+  }
+
+  
+  // build WHERE clause
+  foreach ($content_types_that_give_terms as $type) {
+    $clause_parts[] = "type='$type' ";
+  }
+  
+  $where_clause = implode(' OR ', $clause_parts);
+  //print $where_clause;
+//return;
+  // WHERE clause ready
+  
+  // get terms from DB
+  $result = db_query("SELECT title, nid FROM {node} node WHERE $where_clause");
+  while ($term = db_fetch_object($result)) { //load the $glossary_terms array
+    $glossify_dict[$term->title] = $term->nid;
+  } // endwhile looping through terms
+  // sort the array by string length - long strings first
+  uksort($glossify_dict, "__glossify_sort_array_by_keys_string_length_cmp");
+
+  $glossify_dict_titles = array_keys($glossify_dict);
+
+
+}
+
 
 /**
  * Implementation of hook_init().
  */
 function glossify_init() {
-  global $glossify_dictionary;
-  // 
 
+  _glossify_build_dictionary_of_link_to_terms();
+
+  global $glossify_style;
+  $glossify_style = variable_get('glossify_style', 'links');
 
   // add css only on pages that will be parsed
 // TODO add it only if at least one reason (page/teaser)
 //  drupal_add_css(drupal_get_path('module', 'glossify') . '/glossify.css');
-
-
 }
 
 
@@ -39,10 +82,10 @@ function glossify_init() {
   - view: do sth on view
  */
 function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
-  
+
   $node_type   = $node->type;
   $content_types_to_search = variable_get('glossify_content_types_to_search', node_get_types());
-  
+
   // return, if we're not viewing an appropriate node
   if (!in_array($node_type, $content_types_to_search) ) {
     return;
@@ -52,59 +95,38 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
   $node_body   = $node->body;
   $node_teaser = $node->teaser;
 
-  $content_types_that_give_terms = variable_get('glossify_glossary_content_type', NULL);
-  
-  // return if no nodetypes that hold terms
-  if (!isset($content_types_that_give_terms)) {
-    return; 
-  }
-
-  
-  // build WHERE clause
-  foreach ($content_types_that_give_terms as $type) {
-    $clauseparts[] = 'type = "' . $type . '"';
-  }
-  
-  $whereclause = implode(' OR ', $clauseparts);
-  
-  // WHERE class ready
-  
-  // get terms from DB
-  $result = db_query('SELECT title, nid FROM {node} node WHERE ' . $whereclause);
-  while ($term = db_fetch_object($result)) { //load the $glossary_terms array
-    $glossary_terms[$term->title] = $term->nid;
-  } // endwhile looping through terms
-  
-  
-    // sort the array by string length - long strings first
-  uksort($glossary_terms, "__glossify_sort_array_by_keys_string_length_cmp");
-  
-  $glossify_style = variable_get('glossify_style', 'links');
-  
   switch ($op) {
 
     case 'alter':
-//print_r("$node->title|$a3|$a4|<br>" );
-// a3 ==1 - teaser
-// a4 == 1 - page
       if (variable_get('glossify_display_parsing_time_for_performance_debugging', FALSE) ) {$time = __glossify_timer_start(); }
-      //print_r($glossary_terms);
-      $glossary_terms_search_for = array_keys($glossary_terms);
-      $replacements = __glossify_build_replacements($glossify_style, $glossary_terms, $node_nid);
+
 
       // parse teaser
-      if (variable_get('glossify_teaser', TRUE)) {
-        $node->teaser = __glossify_parse_html_text_and_replace_terms_safely($node_teaser, $glossary_terms_search_for, $replacements);
+      if (variable_get('glossify_teaser', TRUE) && $a3 == 1 ) { // $a3 == 1 means it is a teaser we are parsing
+        global $glossify_style;
+        global $glossify_dict;
+        global $glossify_dict_titles;
+        $replacements = __glossify_build_replacements($glossify_style, $glossify_dict, $node_nid);
+
+        $node->teaser = __glossify_parse_html_text_and_replace_terms_safely($node_teaser, $glossify_dict_titles, $replacements);
+
       }
 
-      // body
-      $node->body = __glossify_parse_html_text_and_replace_terms_safely($node_body, $glossary_terms_search_for,  $replacements);
+      if ( $a4 == 1 ) {      // render the page's body
+        global $glossify_style;
+        global $glossify_dict;
+        global $glossify_dict_titles;
+        $replacements = __glossify_build_replacements($glossify_style, $glossify_dict, $node_nid);
 
+        $node->body = __glossify_parse_html_text_and_replace_terms_safely($node_body, $glossify_dict_titles,  $replacements);
+      }
       if (variable_get('glossify_display_parsing_time_for_performance_debugging', FALSE) ) {__glossify_timer_stop($time); }
 
     break; // done with $op = 'alter'
 
     case 'view': // used for reference section display
+
+      global $glossify_style;
 
       switch ($glossify_style) {
 
@@ -112,8 +134,10 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
           break;
         
         case 'reference':
-        
-          foreach ($glossary_terms as $term_title => $term_nid) {
+
+          global $glossify_dict;
+  
+          foreach ($glossify_dict as $term_title => $term_nid) {
 
             //TODO: this is slow but right! make it fast by saving the found terms from the replacing func
             //        if (__glossify_tell_whether_term_is_present_somewhere_in_the_html_plaintext($node_body, $term_title) ) {
@@ -124,7 +148,10 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
         
         case 'hovertip':
         default:
-          foreach ($glossary_terms as $term_title => $term_nid) {
+
+          global $glossify_dict;
+
+          foreach ($glossify_dict as $term_title => $term_nid) {
       
             //TODO: this is slow but right! make it fast by saving the found terms from the replacing func
             //        if (__glossify_tell_whether_term_is_present_somewhere_in_the_html_plaintext($node_body, $term_title) ) {
