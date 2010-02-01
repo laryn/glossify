@@ -16,6 +16,23 @@ function glossify_menu() {
 }
 
 
+
+/**
+ * Implementation of hook_init().
+ */
+function glossify_init() {
+  global $glossify_dictionary;
+  // 
+
+
+  // add css only on pages that will be parsed
+// TODO add it only if at least one reason (page/teaser)
+//  drupal_add_css(drupal_get_path('module', 'glossify') . '/glossify.css');
+
+
+}
+
+
 /**
  * Implementation of hook_nodeapi().
   - alter: alter body/teaser after all input filters
@@ -24,9 +41,6 @@ function glossify_menu() {
 function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
   
   $node_type   = $node->type;
-  $node_nid    = $node->nid;
-  $node_body   = $node->body;
-  $node_teaser = $node->teaser;
   $content_types_to_search = variable_get('glossify_content_types_to_search', node_get_types());
   
   // return, if we're not viewing an appropriate node
@@ -34,8 +48,9 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
     return;
   }
 
-  // add css only on pages that will be parsed
-  drupal_add_css(drupal_get_path('module', 'glossify') . '/glossify.css');
+  $node_nid    = $node->nid;
+  $node_body   = $node->body;
+  $node_teaser = $node->teaser;
 
   $content_types_that_give_terms = variable_get('glossify_glossary_content_type', NULL);
   
@@ -43,6 +58,7 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
   if (!isset($content_types_that_give_terms)) {
     return; 
   }
+
   
   // build WHERE clause
   foreach ($content_types_that_give_terms as $type) {
@@ -68,8 +84,11 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
   switch ($op) {
 
     case 'alter':
-if (variable_get('glossify_display_parsing_time_for_performance_debugging', FALSE) ) {$time = __glossify_timer_start(); }
-//print_r($glossary_terms);
+//print_r("$node->title|$a3|$a4|<br>" );
+// a3 ==1 - teaser
+// a4 == 1 - page
+      if (variable_get('glossify_display_parsing_time_for_performance_debugging', FALSE) ) {$time = __glossify_timer_start(); }
+      //print_r($glossary_terms);
       $glossary_terms_search_for = array_keys($glossary_terms);
       $replacements = __glossify_build_replacements($glossify_style, $glossary_terms, $node_nid);
 
@@ -77,18 +96,18 @@ if (variable_get('glossify_display_parsing_time_for_performance_debugging', FALS
       if (variable_get('glossify_teaser', TRUE)) {
         $node->teaser = __glossify_parse_html_text_and_replace_terms_safely($node_teaser, $glossary_terms_search_for, $replacements);
       }
-    
+
       // body
       $node->body = __glossify_parse_html_text_and_replace_terms_safely($node_body, $glossary_terms_search_for,  $replacements);
 
-if (variable_get('glossify_display_parsing_time_for_performance_debugging', FALSE) ) {__glossify_timer_stop($time); }
+      if (variable_get('glossify_display_parsing_time_for_performance_debugging', FALSE) ) {__glossify_timer_stop($time); }
 
     break; // done with $op = 'alter'
-    
+
     case 'view': // used for reference section display
-    
+
       switch ($glossify_style) {
-  
+
         case 'links':
           break;
         
