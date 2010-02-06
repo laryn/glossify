@@ -50,7 +50,7 @@ function _glossify_build_dictionary_of_link_to_terms() {
   $result = db_query("SELECT title, nid FROM {node} node WHERE $where_clause");
   while ($term = db_fetch_object($result)) {
     $glossify_dict[$term->title] = $term->nid;
-  } 
+  }
   // sort the array by string length - long strings first
   if (!empty($glossify_dict) ) {
     uksort($glossify_dict, "__glossify_sort_array_by_keys_string_length_cmp");
@@ -78,8 +78,14 @@ function glossify_init() {
 
 /**
  * Implementation of hook_nodeapi().
-  - alter: alter body/teaser after all input filters
-  - view: do sth on view
+ * - alter: alter body/teaser after all input filters
+ * - view: do sth on view
+ *
+ * @param unknown_type $node
+ * @param unknown_type $op
+ * @param unknown_type $a3
+ * @param unknown_type $a4
+ * @return unknown_type
  */
 function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
 
@@ -260,7 +266,7 @@ function __glossify_replace($needles, $replacements, $haystack) {
   }
   
 
-// escape again the htmlentities - useful for non autolinked characters - so they are returned to their previous html-entities-state 
+// escape again the htmlentities - useful for non autolinked characters - so they are returned to their previous html-entities-state
 // (autolinked chars are whatever the link-to titles/strings are ...)
   $haystack = htmlentities($haystack, ENT_COMPAT, "UTF-8");
 
@@ -332,7 +338,7 @@ function __glossify_parse_html_text_and_replace_terms_safely($input_html, $gloss
   // clear memory
   $html_obj->clear();
 
-  // unescape a tags - phase 2 - ending phase - 
+  // unescape a tags - phase 2 - ending phase -
   // then return the parsed_html
   return str_replace($a_markers, $a_unescaped, $html_obj_string);
 }
@@ -348,9 +354,9 @@ function __glossify_tell_whether_term_is_present_somewhere_in_the_html_plaintext
 
   // look only in plaintext html parts - ommit inside html tags - like in <a here> </here>
   foreach ($html_obj->find('text') as $plain_text_obj ) {
-      if (strstr($plain_text_obj->outertext, $term_title) !== FALSE ) { 
+      if (strstr($plain_text_obj->outertext, $term_title) !== FALSE ) {
         $html_obj->clear();
-        return TRUE; 
+        return TRUE;
       }
   } // end foreach plaintext chunk
   
@@ -379,7 +385,7 @@ function __glossify_build_replacements($glossify_style, $glossary_terms, $node_n
   
     // don't link to myself - just replace the term with itself (without a link - just string)
     if ( $term_title == $node_title ) {
-      $replacements[] = $term_title; continue; 
+      $replacements[] = $term_title; continue;
     } // next loop
 
     switch ($glossify_style) {
@@ -406,15 +412,15 @@ function __glossify_build_replacements($glossify_style, $glossary_terms, $node_n
 
 
 function __glossify_timer_start() {
-  $mtime = explode(' ', microtime() ); 
-  return $mtime[1] + $mtime[0]; 
+  $mtime = explode(' ', microtime() );
+  return $mtime[1] + $mtime[0];
 }
 
 
 function __glossify_timer_stop($starttime) {
-  $mtime = explode(' ', microtime() ); 
-  $endtime = $mtime[1] + $mtime[0]; 
-  echo '<br>This page was parsed by Glossify in ' . ($endtime - $starttime) . ' seconds.'; 
+  $mtime = explode(' ', microtime() );
+  $endtime = $mtime[1] + $mtime[0];
+  echo '<br>This page was parsed by Glossify in ' . ($endtime - $starttime) . ' seconds.';
 }
 
 
