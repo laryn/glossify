@@ -1,12 +1,17 @@
 <?php
 // $Id$
 
+
+// cck fields for syn AND target url override
+// title attributes for a tags
+
+
 /**
  * Implementation of hook_menu().
  */
 function glossify_menu() {
   $items['admin/settings/glossify'] = array(
-    'title' => 'Glossify settings',
+    'title' => 'Glossify',
     'description' => 'Manipulate glossify behaviour',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('glossify_admin_settings'),
@@ -39,21 +44,67 @@ function _glossify_build_dictionary_of_link_to_terms() {
   // build WHERE clause
   foreach ($content_types_that_give_terms as $type) {
     $clause_parts[] = "type='$type' ";
+    $clause_parts_with_name[] = "type_name='$type' ";
   }
   
   $where_clause = implode(' OR ', $clause_parts);
-  //print $where_clause;
-//return;
+  $where_clause_with_name = implode(' OR ', $clause_parts_with_name);
   // WHERE clause ready
   
+  
+  
+  
+  
+  // for target cck field
+  $field_name_for_the_target = variable_get('glossify_use_this_cck_field_for_target_url_override', 'none');
+  $field_name_for_the_target_name_of_the_value_column = $field_name_for_the_target . "_value";
+  
+  
+  if ($field_name_for_the_target != 'none' ) {
+   $target_vals_table_name = __glossify_get_val_table_from_cck_field_name($field_name_for_the_target);
+  }
+
   // get terms from DB
-  $result = db_query("SELECT title, nid FROM {node} node WHERE $where_clause");
-  while ($term = db_fetch_object($result)) {
-    $glossify_dict[$term->title] = $term->nid;
+  $result_3 = db_query("SELECT title, nid FROM {node} node WHERE $where_clause");
+  while ($obj_3 = db_fetch_object($result_3)) {
+    $nid = $obj_3->nid;
+
+    
+    if ( $field_name_for_the_target != 'none'  ) {
+      $result_2 = db_query("
+        SELECT vals_table.vid, vals_table.nid, vals_table.%s FROM {" . $target_vals_table_name . "} vals_table
+        JOIN {node} node
+          ON vals_table.vid = node.vid
+        WHERE %s IS NOT NULL
+          AND vals_table.nid = %d
+      ", $field_name_for_the_target_name_of_the_value_column, $field_name_for_the_target_name_of_the_value_column, $nid);
+    
+      if ($obj_2 = db_fetch_object($result_2) ) {
+        $target = $obj_2->{$field_name_for_the_target_name_of_the_value_column};
+      }
+      // empty - use node nid
+      else {
+        $target = 'node/' . $nid;
+      }
+    }
+    else {
+      $target = 'node/' . $nid;
+    }
+    
+    
+    $glossify_dict[$obj_3->title] = $target;
+  }
+
+  $synonyms_dict = glossify_get_synonyms();
+  
+  if (!empty($synonyms_dict)) {
+    foreach ($synonyms_dict as $title => $target_url ) {
+      $glossify_dict[$title] = $target_url;
+    }
   }
   
-  // inject synonyms
-  $glossify_dict['turpis'] = "4";
+
+  
   
   
   // sort the array by string length - long strings first
@@ -62,8 +113,117 @@ function _glossify_build_dictionary_of_link_to_terms() {
     $glossify_dict_titles = array_keys($glossify_dict);
   }
 
+  
+  //print_r($glossify_dict);
+  
 }
 
+
+
+
+function __glossify_get_val_table_from_cck_field_name($field_name) {
+  // otidi vyv f ins i vzemi vsi4ki gloss inst
+  // ako e samo 1 - tyrsi gloss vals v node_ctype
+  // ako sa pove4e - vyv content_field_gloss
+  $how_many_cck_instances_we_have =
+    db_result(db_query("SELECT COUNT(*) FROM {content_node_field_instance} WHERE field_name = '%s' ",
+    $field_name));
+  
+  $result = db_query("SELECT type_name FROM {content_node_field_instance} WHERE field_name = '%s' ",
+    $field_name);
+  while ( $obj = db_fetch_object($result) ) {
+    $cck_types_that_have_this_field[] = $obj->type_name;
+  }
+    
+    
+  if (    $how_many_cck_instances_we_have == "0") {
+    // some warning?
+  }
+  elseif ($how_many_cck_instances_we_have == "1") {
+    // look into the type table
+    $vals_table_name = "content_type_" . $cck_types_that_have_this_field[0];
+  }
+  // look into content_field_glossify_synonyms for example
+  else {
+    $vals_table_name = "content_" . $field_name;
+  }
+
+  return $vals_table_name;
+  
+}
+
+
+
+function glossify_get_synonyms() {
+  /////////
+  // inject synonyms
+  //$glossify_dict['turpis'] = "5";
+  // get synonyms from nodes
+  $field_name_for_the_synonyms = variable_get('glossify_use_this_cck_field_for_keyword_synonyms', 'none');
+  
+  if ( $field_name_for_the_synonyms == 'none' ) {return array(); }
+  
+  $field_name_for_the_synonyms_name_of_the_value_column = $field_name_for_the_synonyms . "_value";
+  
+  $syn_vals_table_name = __glossify_get_val_table_from_cck_field_name($field_name_for_the_synonyms);
+
+  // for target cck field
+  $field_name_for_the_target = variable_get('glossify_use_this_cck_field_for_target_url_override', '');
+  $field_name_for_the_target_name_of_the_value_column = $field_name_for_the_target . "_value";
+  
+  if ( $field_name_for_the_target != 'none'  ) {
+    $target_vals_table_name = __glossify_get_val_table_from_cck_field_name($field_name_for_the_target);
+  }
+  
+  
+  $result = db_query("
+    SELECT vals_table.vid, vals_table.nid, vals_table.%s FROM {" . $syn_vals_table_name . "} vals_table
+    JOIN {node} node
+      ON vals_table.vid = node.vid
+    WHERE %s IS NOT NULL
+  ", $field_name_for_the_synonyms_name_of_the_value_column, $field_name_for_the_synonyms_name_of_the_value_column );
+  
+  while ( $obj = db_fetch_object($result) ) {
+    $cck_vals = explode(",", $obj->{$field_name_for_the_synonyms_name_of_the_value_column} );
+    $nid = $obj->nid;
+    
+    if (!empty($cck_vals) ) {
+      
+      if ( $field_name_for_the_target != 'none' ) {
+      
+        $result_2 = db_query("
+          SELECT vals_table.vid, vals_table.nid, vals_table.%s FROM {" . $target_vals_table_name . "} vals_table
+          JOIN {node} node
+            ON vals_table.vid = node.vid
+          WHERE %s IS NOT NULL
+            AND vals_table.nid = %d
+        ", $field_name_for_the_target_name_of_the_value_column, $field_name_for_the_target_name_of_the_value_column, $nid);
+  
+        if ($obj_2 = db_fetch_object($result_2) ) {
+          $target = $obj_2->{$field_name_for_the_target_name_of_the_value_column};
+        }
+        // empty - use node nid
+        else {
+          $target = 'node/' . $nid;
+        }
+      
+      }
+      else {
+        $target = 'node/' . $nid;
+      }
+      
+      foreach ($cck_vals as $val) {
+        $val_trimmed = trim($val, " ");
+        // now we have the keywords
+        // check for target overrides  and if any - use them
+        $syn_dict[$val_trimmed] = $target;
+      }
+    }
+  }
+  //drupal_set_message("<pre>" . print_r($syn_dict, true));
+  
+  return $syn_dict;
+}
 
 /**
  * Implementation of hook_init().
@@ -103,14 +263,17 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
   }
 
   $node_nid    = $node->nid;
-  $node_body   = $node->body;
-  $node_teaser = $node->teaser;
+  //$node_body   = $node->body;
+  $node_body   = $node->content['body']['#value'];
+  
+  //$node_teaser = $node->teaser;
+  $node_teaser = $node->content['teaser']['#value'];
+  
 
   switch ($op) {
 
     case 'alter':
       if (variable_get('glossify_display_parsing_time_for_performance_debugging', FALSE) ) {$time = __glossify_timer_start(); }
-
 
       // parse teaser
       if (variable_get('glossify_teaser', TRUE) && $a3 == 1 ) { // $a3 == 1 means it is a teaser we are parsing
@@ -386,8 +549,9 @@ function __glossify_build_replacements($glossify_style, $glossary_terms, $node_n
   $node       = node_load($node_nid);
   $node_title = $node->title;
 
-  foreach ($glossary_terms as $term_title => $term_nid) {
+  foreach ($glossary_terms as $term_title => $target_url) {
   
+    // TODO self-linking improve it for synonyms too
     // don't link to myself - just replace the term with itself (without a link - just string)
     if ( $term_title == $node_title ) {
       $replacements[] = $term_title; continue;
@@ -396,8 +560,8 @@ function __glossify_build_replacements($glossify_style, $glossary_terms, $node_n
     switch ($glossify_style) {
       
       case 'links':
-        // TODO a title ccustom
-        $replacements[] = l($term_title, 'node/' . $term_nid,
+        // TODO a title custom
+        $replacements[] = l($term_title, $target_url,
           array('attributes' => array('title' => $term_title, 'class' => 'glossify_term')));
       break;
     
@@ -495,9 +659,32 @@ function glossify_admin_settings() {
     '#default_value' => variable_get('glossify_display_parsing_time_for_performance_debugging', FALSE),
   );
 
-  // glossify_use_this_cck_field_for_keyword_synonyms
+  //
   
-  // Add default buttons to a form and set its prefix.
+  foreach (array_keys(content_fields()) as $key ) {
+    $all_cck_field_names[$key] = $key;
+  }
+  $all_cck_field_names['none'] = 'none';
+  
+  $form['glossify_use_this_cck_field_for_keyword_synonyms'] = array(
+    '#type' => 'select',
+    '#title' => t("CCK field to look into for synonyms of the node's title. For more than 1 content type - use the same cck field please."),
+    '#options' => $all_cck_field_names,
+    '#default_value' => variable_get('glossify_use_this_cck_field_for_keyword_synonyms', 'none'),
+    '#description' => t('Select a CCK field for synonyms.'),
+  );
+
+  $form['glossify_use_this_cck_field_for_target_url_override'] = array(
+    '#type' => 'select',
+    '#title' => t("CCK field to look into for a 'target url override'. For more than 1 content type - use the same cck field please."),
+    '#options' => $all_cck_field_names,
+    '#default_value' => variable_get('glossify_use_this_cck_field_for_target_url_override', 'none'),
+    '#description' => t("Select a CCK field for target override.  After you create the cck field and then put something into it
+      Example: 'node/34', 'url_alias', 'http://example.com/path' this will make the target url point to your override path."),
+  );
+  
+  
+  // system_settings_form: Add default buttons to a form and set its prefix.
   // then return it to the page callback of the menu (drupal_get_form)
   return system_settings_form($form);
 }
