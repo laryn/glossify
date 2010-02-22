@@ -2,9 +2,6 @@
 // $Id$
 
 
-// cck fields for syn AND target url override
-// title attributes for a tags
-
 
 /**
  * Implementation of hook_menu().
