@@ -2,7 +2,11 @@
 name = Glossify
 description = Automatically links nodes in your site according to your settings - parses node bodies searching for titles of another nodes.
 package = Filter
-dependencies[] = node 
+dependencies[] = node
 dependencies[] = simplehtmldom
+dependencies[] = content
+; dependencies[] = views
+; ?
+
 core = 6.x
 
