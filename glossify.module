@@ -459,6 +459,18 @@ function __glossify_parse_html_text_and_replace_terms_safely($input_html, $gloss
     // the actual escaping happens
     $obj->outertext          = $a_marker;
   }
+
+// legend tags escape - for CCK fieldgroups
+  foreach ($html_obj->find('legend') as $obj) {
+    // $i continues from where it finnished above
+    $i++;
+    $a_marker = "<!--[_a_" . $i . "_a_]-->"; // so they are now html-tags and get packed into them
+    $a_markers[$i]   = $a_marker;
+    // save the real tags' text now - so you can unescape them later
+    $a_unescaped[$i] = $obj->outertext;
+    // the actual escaping happens
+    $obj->outertext          = $a_marker;
+  }
   
 
   
