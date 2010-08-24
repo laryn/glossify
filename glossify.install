@@ -1,0 +1,93 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Glossify's install and uninstall code.
+ */
+
+/**
+ * Implementation of hook_install().
+ */
+function glossify_install() {
+  drupal_install_schema('glossify');
+}
+
+/**
+ * Implementation of hook_enable().
+ */
+function glossify_enable() {
+  if (!variable_get('glossify_configurations', FALSE)) {
+    $global_configuration = array(
+      'from' => variable_get('glossify_content_types_to_search', array()),
+      'to' => variable_get('glossify_glossary_content_type', array()),
+      'only_first' => variable_get('glossify_link_first_only', 1),
+      'unicode' => variable_get('glossify_do_we_need_unicode_compatibility', 1),
+      'teaser' => variable_get('glossify_teaser', 1),
+      'style' => array(variable_get('glossify_style', 'links')),
+      'break' => variable_get('glossify_dont_break_words', 0),
+      'language' => 0,
+      'methods' => array(
+        'use_title' => 1,
+        'use_internal' => 0,
+        'use_cck' => (variable_get('glossify_use_this_cck_field_for_keyword_synonyms', FALSE) || variable_get('glossify_use_this_cck_field_for_target_url_override', FALSE)) ? 1 : 0,
+        'keyword_field' => variable_get('glossify_use_this_cck_field_for_keyword_synonyms', ''),
+        'override_field' => variable_get('glossify_use_this_cck_field_for_target_url_override', ''),
+        'use_taxonomy' => 0,
+        'vocabulary' => array()
+      ),
+    );
+    variable_set('glossify_configurations', array('global' => $global_configuration));
+    _backwards_compatibility();
+    cache_clear_all();
+    drupal_rebuild_theme_registry();
+  }
+}
+
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function glossify_uninstall() {
+  variable_del('glossify_configurations');
+  drupal_uninstall_schema('glossify');
+}
+
+/**
+ * Implementation of hook_schema().
+ */
+function glossify_schema() {
+  $schema['glossify_terms'] = array(
+    'fields' => array(
+      'gtid' => array(
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE),
+      'nid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0),
+      'term' => array(
+        'type' => 'varchar',
+        'not null' => TRUE,
+        'length' => 256),
+      'language' => array(
+        'type' => 'varchar',
+        'length' => 12,
+        'not null' => TRUE,
+        'default' => ''),
+      'method' => array(
+        'type' => 'varchar',
+        'length' => 12,
+        'not null' => TRUE,
+        'default' => ''),
+      'alternate' => array(
+        'type' => 'varchar',
+        'not null' => TRUE,
+        'length' => 256),
+    ),
+    'primary key' => array('gtid'),
+  );
+  return $schema;
+}
