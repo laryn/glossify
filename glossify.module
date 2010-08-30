@@ -82,15 +82,15 @@ function theme_glossify_term($target, $glossify_style) { // outputs proper div s
   }
   switch ($glossify_style) {
     case 'reference':
-      $output = '<dt>' . $term->title . '</dt>';
-      $output .= '<dd>' . $term->body . '</dd>';
+      $output = '<dt>' . check_plain($term->title) . '</dt>';
+      $output .= '<dd>' . check_body($term->body) . '</dd>';
       break;
     case 'hovertip':
     default:
-      $output = '<div id="' . $term->title . '" class="hovertip" style="display: none;">';
+      $output = '<div id="' . check_plain($term->title) . '" class="hovertip" style="display: none;">';
       // Output a DIV to make hovertip work.
-      $output .= '<h1>' . $term->title . '</h1>';
-      $output .= '<p>' . $term->body . '</p>';
+      $output .= '<h1>' . check_plain($term->title) . '</h1>';
+      $output .= '<p>' . check_body($term->body) . '</p>';
       $output .= '</div>';
       break;
   } // endswitch glossify style
@@ -110,6 +110,7 @@ function theme_glossify_reference_section($term_definition_list) {
   $output .= '</div>';
   return $output;
 }
+
 
 /**
  * Implementation of hook_form_alter().
@@ -157,7 +158,7 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
   switch ($op) {
     case 'load':
       $glossify_keywords = implode(', ', _fetch_keywords($node->nid, 'internal'));
-      $glossify_override = db_result(db_query('SELECT alternate FROM {glossify_terms} WHERE nid = %d', $node->nid));
+      $glossify_override = db_result(db_query('SELECT alternate FROM {glossify} WHERE nid = %d', $node->nid));
       return array('glossify_keywords' => $glossify_keywords, 'glossify_override' => $glossify_override);
       break;
     
@@ -222,11 +223,11 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
       foreach ($configurations as $config_name => $configuration) {
         if (in_array($node->type, $configuration['to'])) {
           if ($configuration['methods']['use_title']) {
-            if (!db_result(db_query("SELECT gtid FROM {glossify_terms} WHERE nid = %d AND method = '%s'", $node->nid, 'title'))) {
+            if (!db_result(db_query("SELECT gtid FROM {glossify} WHERE nid = %d AND method = '%s'", $node->nid, 'title'))) {
               _keyword_table('insert', $node->nid, 'title', $node->language, $node->title);
               $keywords[$node->title] = $node->title;
             }
-            elseif (!db_result(db_query("SELECT gtid FROM {glossify_terms} WHERE nid = %d AND method = '%s' AND term = '%s'", $node->nid, 'title', $node->title))) {
+            elseif (!db_result(db_query("SELECT gtid FROM {glossify} WHERE nid = %d AND method = '%s' AND term = '%s'", $node->nid, 'title', $node->title))) {
               $keywords = array_merge($keywords, _keyword_table('update', $node->nid, 'title', $node->language, $node->title));
               $keywords[$node->title] = $node->title;
             }
@@ -251,7 +252,7 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
       }
       break;
     
-    case 'view': // used for reference section display
+    case 'view':
       $configurations = variable_get('glossify_configurations', array());
       $term_definition_list = '';
       $referenced_terms = array();
@@ -312,6 +313,7 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
   }
 }
 
+
 /**
  * Implementation of hook_filter().
  */
@@ -328,13 +330,9 @@ function glossify_filter($op, $delta = 0, $format = -1, $text = '', $cache_id = 
 
     case 'process':
       if (($node = menu_get_object()) == NULL) {
-        $q = db_query("SELECT nid, format, body FROM {node_revisions} WHERE 1");
-        while ($r = db_fetch_array($q)) {
-          if ($cache_id == $r['format'].':'.md5($r['body'])) {
-            $nid = $r['nid'];
-          }
-        }
-        $node = node_load($nid);
+        $q = db_query("SELECT nid FROM {node_revisions} WHERE '%s'=CONCAT(format, ':', MD5(body))", $cache_id);
+        $r = db_fetch_object($q);
+        $node = node_load($r->nid);
       }
       $configurations = variable_get('glossify_configurations', array());
       $html_body = str_get_html($text);
@@ -364,6 +362,9 @@ function glossify_filter($op, $delta = 0, $format = -1, $text = '', $cache_id = 
 }
 
 
+/**
+ * Helper function that fetches and returns the styled term depending on the style and term.
+ */
 function _glossify_replace($configuration, &$html, $term_title, $replacement, &$replaced) {
   if (count($html->childNodes()) > 0) {
     foreach ($html->childNodes() as $child_node) {
@@ -405,7 +406,7 @@ function _fetch_replacement($style, $term_title, $target_url) {
  * Helper function that fetches and returns an array of all keywords of a node, or just the ones for a specific method.
  */
 function _fetch_keywords($nid, $method = FALSE) {
-  $q = db_query("SELECT term, method FROM {glossify_terms} WHERE nid = %d ORDER BY term", $nid);
+  $q = db_query("SELECT term, method FROM {glossify} WHERE nid = %d ORDER BY term", $nid);
   $glossary = array();
   while ($r = db_fetch_array($q)) {
     if ($method) {
@@ -427,22 +428,22 @@ function _fetch_keywords($nid, $method = FALSE) {
 function _keyword_table($operation, $nid, $method, $language = '', $term = '', $alternate = '') {
   switch ($operation) {
     case 'insert':
-      $gnid = db_result(db_query("SELECT nid FROM {glossify_terms} WHERE term = '%s' AND language = '%s'", $term, $language));
+      $gnid = db_result(db_query("SELECT nid FROM {glossify} WHERE term = '%s' AND language = '%s'", $term, $language));
       $new_terms = array();
       if (!$gnid) {
-        db_query("INSERT INTO {glossify_terms} (nid, term, language, method, alternate) VALUES (%d, '%s', '%s', '%s', '%s')", $nid, $term, $language, $method, $alternate);
+        db_query("INSERT INTO {glossify} (nid, term, language, method, alternate) VALUES (%d, '%s', '%s', '%s', '%s')", $nid, $term, $language, $method, $alternate);
         $new_terms[$term] = $term;
       }
       else {
         $node = node_load($gnid);
-        drupal_set_message(t("Keyword: '$term' already exists for <a href=\"/node/$node->nid\">$node->title</a>"), 'warning');
+        drupal_set_message(t("Keyword: '%term' already exists for <a href=\"/node/$node->nid\">%title</a>", array('%term' => $term, '%title' => $node->title)), 'warning');
       }
       return $new_terms;
       break;
     
     case 'update':
-      $old_term = db_result(db_query("SELECT term FROM {glossify_terms} WHERE nid = %d AND method = '%s'", $nid, 'title'));
-      db_query("UPDATE {glossify_terms} SET term = '%s', language = '%s', method = '%s' WHERE nid = %d AND method = '%s'", $term, $language, $method, $nid, 'title');
+      $old_term = db_result(db_query("SELECT term FROM {glossify} WHERE nid = %d AND method = '%s'", $nid, 'title'));
+      db_query("UPDATE {glossify} SET term = '%s', language = '%s', method = '%s' WHERE nid = %d AND method = '%s'", $term, $language, $method, $nid, 'title');
       return array($old_term => $old_term);
       break;
     
@@ -450,14 +451,14 @@ function _keyword_table($operation, $nid, $method, $language = '', $term = '', $
       $old_terms = array();
       if (!empty($term)) {
         $old_terms[$term] = $term;
-        db_query("DELETE FROM {glossify_terms} WHERE nid = %d AND method = '%s' AND language = '%s' AND term = '%s'", $nid, $method, $language, $term);
+        db_query("DELETE FROM {glossify} WHERE nid = %d AND method = '%s' AND language = '%s' AND term = '%s'", $nid, $method, $language, $term);
       }
       else{
-        $q = db_query("SELECT term FROM {glossify_terms} WHERE nid = %d AND method = '%s' ORDER BY term", $nid, $method);
+        $q = db_query("SELECT term FROM {glossify} WHERE nid = %d AND method = '%s' ORDER BY term", $nid, $method);
         while ($r = db_fetch_array($q)) {
           $old_terms[$r['term']] = $r['term'];
         }
-        db_query("DELETE FROM {glossify_terms} WHERE nid = %d AND method = '%s'", $nid, $method);
+        db_query("DELETE FROM {glossify} WHERE nid = %d AND method = '%s'", $nid, $method);
       }
       return $old_terms;
       break;
@@ -560,10 +561,10 @@ function _fetch_possible_keywords($configuration, $nid) {
     $methods[] = "'taxonomy'";
   }
   if ($configuration['language']) {
-    $q = db_query("SELECT g.term, g.nid, g.alternate, g.language FROM {node} n INNER JOIN {glossify_terms} g ON g.nid = n.nid WHERE g.language = n.language AND n.type IN (". db_placeholders($configuration['to'], 'varchar') .") AND g.nid != %d AND g.method IN (". implode(', ', $methods) .")", $configuration['to'], $nid);
+    $q = db_query("SELECT g.term, g.nid, g.alternate, g.language FROM {node} n INNER JOIN {glossify} g ON g.nid = n.nid WHERE g.language = n.language AND n.type IN (". db_placeholders($configuration['to'], 'varchar') .") AND g.nid != %d AND g.method IN (". implode(', ', $methods) .")", $configuration['to'], $nid);
   }
   else {
-    $q = db_query("SELECT g.term, g.nid, g.alternate, g.language FROM {node} n INNER JOIN {glossify_terms} g ON g.nid = n.nid WHERE n.type IN (". db_placeholders($configuration['to'], 'varchar') .") AND g.nid != %d AND g.method IN (". implode(', ', $methods) .")", $configuration['to'], $nid);
+    $q = db_query("SELECT g.term, g.nid, g.alternate, g.language FROM {node} n INNER JOIN {glossify} g ON g.nid = n.nid WHERE n.type IN (". db_placeholders($configuration['to'], 'varchar') .") AND g.nid != %d AND g.method IN (". implode(', ', $methods) .")", $configuration['to'], $nid);
   }
   while ($r = db_fetch_array($q)) {
     if (!empty($r['alternate'])) {
@@ -590,19 +591,25 @@ function _fetch_possible_keywords($configuration, $nid) {
  * Helper function that cleans up old variables and inserts old cck values into the keyword table.
  */
 function _backwards_compatibility() {
-  if (variable_get('glossify_use_this_cck_field_for_keyword_synonyms', FALSE) || variable_get('glossify_use_this_cck_field_for_target_url_override', FALSE)) {
-    $keywords = array();
+  $keyword_field = variable_get('glossify_use_this_cck_field_for_keyword_synonyms', FALSE);
+  $override_field = variable_get('glossify_use_this_cck_field_for_target_url_override', FALSE);
+  if ($keyword_field) {
     $content_types = variable_get('glossify_glossary_content_type', array());
-    $q = db_query("SELECT nid FROM {node} WHERE type IN (". db_placeholders($content_types, 'varchar') .") ", $content_types);
-    $nodes = array();
-    while ($r = db_fetch_array($q)) {
-      $nodes[] = node_load($r['nid']);
-    }
-    foreach ($nodes as $node) {
-      $keyword_field = variable_get('glossify_use_this_cck_field_for_keyword_synonyms', '');
-      $override_field = variable_get('glossify_use_this_cck_field_for_target_url_override', '');
-      _keyword_table('insert', $node->nid, 'cck', $node->language, $node->$keyword_field[0]['value'], $node->$override_field[0]['value']);
-      _keyword_table('insert', $node->nid, 'title', $node->language, $node->title, '');
+    foreach ($content_types as $content_type) {
+      $table = 'content_type_'. $content_type;
+      $q = db_query("SELECT nid FROM {$table} WHERE 1");
+      while ($r = db_fetch_array($q)) {
+        $node = node_load($r['nid'], NULL, TRUE);
+        $keyword = $node->$keyword_field;
+        if ($override_field == 'none') {
+          _keyword_table('insert', $node->nid, 'cck', $node->language, $keyword[0]['value'], '');
+        }
+        else{
+          $override = $node->$override_field;
+          _keyword_table('insert', $node->nid, 'cck', $node->language, $keyword[0]['value'], $override[0]['value']);
+        }
+        _keyword_table('insert', $node->nid, 'title', $node->language, $node->title, '');
+      }
     }
   }
   variable_del('glossify_glossary_content_type');

@@ -19,7 +19,7 @@ You have:
 INSTALL
 -----------
 - download, enable and set up via admin/settings/glossify
-
+- make sure to enable the Glossify filter for your input formats via admin/settings/filters/list
 
 
 Autors and Sponsors
@@ -28,7 +28,10 @@ Autors and Sponsors
 Development of this module (1.0 release) was sponsored initially by leptree.net. (eafarris)
 - ea.Farris <eric@eafarris.com> - <http://drupal.org/user/812>
 
-And from the middle of 2009 (2.0 and 3.0) the development was 
-further sponsored by http://segments.at/ (rsvelko).
+From the middle of 2009 (2.0 and 2.5) the development was 
+further sponsored by http://segments.at/ (segments).
 - rsvelko - vladimir@segments.at - http://segments.at/
 
+And from August 2010 (3.0) the module was rewritten.
+The development was sponsored by http://segments.at/ (segments).
+- segments - office@segments.at - http://segments.at/

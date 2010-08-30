@@ -18,6 +18,9 @@ function glossify_install() {
  */
 function glossify_enable() {
   if (!variable_get('glossify_configurations', FALSE)) {
+    if (!db_table_exists('glossify')) {
+      drupal_install_schema('glossify');
+    }
     $global_configuration = array(
       'from' => variable_get('glossify_content_types_to_search', array()),
       'to' => variable_get('glossify_glossary_content_type', array()),
@@ -57,7 +60,7 @@ function glossify_uninstall() {
  * Implementation of hook_schema().
  */
 function glossify_schema() {
-  $schema['glossify_terms'] = array(
+  $schema['glossify'] = array(
     'fields' => array(
       'gtid' => array(
         'type' => 'serial',
