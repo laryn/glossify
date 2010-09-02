@@ -83,14 +83,14 @@ function theme_glossify_term($target, $glossify_style) { // outputs proper div s
   switch ($glossify_style) {
     case 'reference':
       $output = '<dt>' . check_plain($term->title) . '</dt>';
-      $output .= '<dd>' . check_body($term->body) . '</dd>';
+      $output .= '<dd>' . check_markup($term->body) . '</dd>';
       break;
     case 'hovertip':
     default:
       $output = '<div id="' . check_plain($term->title) . '" class="hovertip" style="display: none;">';
       // Output a DIV to make hovertip work.
       $output .= '<h1>' . check_plain($term->title) . '</h1>';
-      $output .= '<p>' . check_body($term->body) . '</p>';
+      $output .= '<p>' . check_markup($term->body) . '</p>';
       $output .= '</div>';
       break;
   } // endswitch glossify style
