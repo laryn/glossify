@@ -242,9 +242,7 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
           }
           
           if ($configuration['methods']['use_taxonomy']) {
-            foreach ($configuration['methods']['vocabulary'] as $vocabulary) {
-              $keywords = array_merge($keywords, _fetch_affected_keywords($node, 'taxonomy', $vocabulary));
-            }
+            $keywords = array_merge($keywords, _fetch_affected_keywords($node, 'taxonomy', $configuration['methods']['vocabulary']));
           }
           
           $affected_content_types[$config_name] = array_merge($affected_content_types, $configuration['from']);
@@ -258,8 +256,8 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
       $referenced_terms = array();
       foreach ($configurations as $config_name => $configuration) {
         if (in_array($node->type, $configuration['from'])) {
-        $possible_keywords = _fetch_possible_keywords($configuration, $node->nid);
-          if (in_array('reference', $configuration['style'])) {
+          $possible_keywords = _fetch_possible_keywords($configuration, $node->nid);
+          if (in_array('reference', $configuration['style']) && $configuration['style']['reference']) {
             foreach ($possible_keywords as $term_title => $path) {
               if ($configuration['break']) {
                 if (preg_match('/\b' . $term_title . '\b/', $node->body)) {
@@ -279,7 +277,7 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
               }
             }
           }
-          if (in_array('hovertip', $configuration['style'])) {
+          if (in_array('hovertip', $configuration['style']) && $configuration['style']['hovertip']) {
             foreach ($possible_keywords as $term_title => $path) {
               if ($configuration['break']) {
                 if (preg_match('/\b' . $term_title . '\b/', $node->body)) {
@@ -479,23 +477,22 @@ function _fetch_affected_keywords($node, $method, $keywordsource = NULL, $overri
       $form_override = $node->glossify_override;
       break;
     case 'cck':
-      if (isset($node->$keywordsource[0]['value']) && isset($node->$override[0]['value'])) {
-        $form_keywords = !empty($node->$keywordsource[0]['value'])? array_map('trim', explode(',', $node->$keywordsource[0]['value'])) : array();
-        $form_override = $node->$override[0]['value'];
-      }
-      else {
-        drupal_set_message(t("This content type does not have the selected CCK Fields attached to it!<br />You need to either change the configuration or attach the selected CCK Fields to this content type."),'warning');
-        return array();
+      $keyword = $node->$keywordsource;
+      $override = $node->$override;
+      if (isset($keyword[0]['value']) && isset($override[0]['value'])) {
+        $form_keywords = !empty($keyword[0]['value'])? array_map('trim', explode(',', $keyword[0]['value'])) : array();
+        $form_override = $override[0]['value'];
       }
       break;
     case 'taxonomy':
-      if (isset($node->taxonomy['tags'][$keywordsource])) {
-        $form_keywords = !empty($node->taxonomy['tags'][$keywordsource])? array_map('trim', explode(',', $node->taxonomy['tags'][$keywordsource])) : array();
+      if (isset($node->taxonomy)) {
+        $form_keywords = array();
+        foreach ($node->taxonomy as $tag) {
+          if (in_array($tag->vid, $keywordsource)) {
+            $form_keywords[] = trim($tag->name);
+          }
+        }
         $form_override = $override;
-      }
-      else {
-        drupal_set_message(t("This content type does not have the selected Vocabulary attached to it!<br />You need to either change the configuration or attach the selected Vocabulary to this content type."),'warning');
-        return array();
       }
       break;
   }
@@ -546,7 +543,7 @@ function _fetch_affected_nodes($keywords, $content_types) {
 
 
 /**
- * Helper function the possible keywords for a given configuration and nid.
+ * Helper function that fetches the possible keywords for a given configuration and nid.
  */
 function _fetch_possible_keywords($configuration, $nid) {
   $glossify_dict = array();
@@ -588,28 +585,59 @@ function _fetch_possible_keywords($configuration, $nid) {
 
 
 /**
+ * Helper function that updates the keyword-tables according to the new/old methods.
+ */
+function _update_keywords_for_methods($content_types, $methods) {
+  $q = db_query("SELECT nid FROM {node} WHERE type IN (". db_placeholders($content_types, 'varchar') .")", $content_types);
+  while ($r = db_fetch_array($q)) {
+    $node = node_load($r['nid'], NULL, TRUE);
+    if (isset($methods['title'])) {
+      if ($methods['title']) {
+        _keyword_table('insert', $node->nid, 'title', $node->language, $node->title);
+      }
+      else {
+        _keyword_table('delete', $node->nid, 'title', $node->language);
+      }
+    }
+    if (isset($methods['internal'])) {
+      if ($methods['internal']['use_internal']) {
+        _fetch_affected_keywords($node, 'internal');
+      }
+      else {
+        _keyword_table('delete', $node->nid, 'internal', $node->language);
+      }
+    }
+    if (isset($methods['cck'])) {
+      if ($methods['cck']['use_cck']) {
+        _fetch_affected_keywords($node, 'cck', $methods['cck']['keyword_field'], $methods['cck']['override_field']);
+      }
+      else {
+        _keyword_table('delete', $node->nid, 'cck', $node->language);
+      }
+    }
+    if (isset($methods['taxonomy'])) {
+      if ($methods['taxonomy']['use_taxonomy']) {
+        _fetch_affected_keywords($node, 'taxonomy', $methods['taxonomy']['vocabulary']);
+      }
+      else {
+        _keyword_table('delete', $node->nid, 'taxonomy', $node->language);
+      }
+    }
+  }
+}
+
+
+/**
  * Helper function that cleans up old variables and inserts old cck values into the keyword table.
  */
 function _backwards_compatibility() {
   $keyword_field = variable_get('glossify_use_this_cck_field_for_keyword_synonyms', FALSE);
-  $override_field = variable_get('glossify_use_this_cck_field_for_target_url_override', FALSE);
+  $override_field = variable_get('glossify_use_this_cck_field_for_target_url_override', '');
   if ($keyword_field) {
     $content_types = variable_get('glossify_glossary_content_type', array());
-    foreach ($content_types as $content_type) {
-      $table = 'content_type_'. $content_type;
-      $q = db_query("SELECT nid FROM {$table} WHERE 1");
-      while ($r = db_fetch_array($q)) {
-        $node = node_load($r['nid'], NULL, TRUE);
-        $keyword = $node->$keyword_field;
-        if ($override_field == 'none') {
-          _keyword_table('insert', $node->nid, 'cck', $node->language, $keyword[0]['value'], '');
-        }
-        else{
-          $override = $node->$override_field;
-          _keyword_table('insert', $node->nid, 'cck', $node->language, $keyword[0]['value'], $override[0]['value']);
-        }
-        _keyword_table('insert', $node->nid, 'title', $node->language, $node->title, '');
-      }
+    if (count($content_types > 0 )) {
+      $methods = array('title', 'cck' => array('keyword_field' => $keyword_field, 'override_field' => $override_field));
+      _update_keywords_for_methods($content_types, $methods);
     }
   }
   variable_del('glossify_glossary_content_type');

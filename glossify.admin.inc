@@ -8,6 +8,7 @@
  * @ingroup glossify
  */
 
+
 /**
  * Form builder for administrative settings.
  */
@@ -238,6 +239,7 @@ function glossify_admin_settings_validate($form, &$form_state) {
   if (empty($form_state['values']['style']['hovertip']) && empty($form_state['values']['style']['links']) && empty($form_state['values']['style']['reference'])) {
     form_set_error('styles', t('You need to select at least one Style.'));
   }
+  
 }
 
  
@@ -272,6 +274,29 @@ function glossify_admin_settings_submit($form, &$form_state) {
       'methods' => $methods,
     );
     $name = empty($form_state['values']['name']) ? 'global' : $form_state['values']['name'];
+    if (isset($configurations[$name])) {
+      $last_methods = $configurations[$name]['methods'];
+      $methods_to_update = array();
+      if ($last_methods['use_title'] !== $methods['use_title']) {
+        $methods_to_update['title'] = $methods['use_title'];
+        drupal_set_message('Title-keywords were updated.', 'status');
+      }
+      if ($last_methods['use_internal'] !== $methods['use_internal']) {
+        $methods_to_update['internal'] = $methods['use_internal'];
+        drupal_set_message('Internal-keywords were updated.', 'status');
+      }
+      if (($last_methods['use_cck'] !== $methods['use_cck']) || ($last_methods['keyword_field'] !== $methods['keyword_field']) || ($last_methods['override_field'] !== $methods['override_field'])) {
+        $methods_to_update['cck'] = array('use_cck' => $methods['use_cck'], 'keyword_field' => $methods['keyword_field'], 'override_field' => $methods['override_field']);
+        drupal_set_message('CCK-keywords were updated.', 'status');
+      }
+      if (($last_methods['use_taxonomy'] !== $methods['use_taxonomy']) || ($last_methods['vocabulary'] !== $methods['vocabulary'])) {
+        $methods_to_update['taxonomy'] = array('use_taxonomy' => $methods['use_taxonomy'], 'vocabulary' => $methods['vocabulary']);
+        drupal_set_message('Taxonomy-keywords were updated.', 'status');
+      }
+      if (count($methods_to_update) > 0) {
+        _update_keywords_for_methods($configuration['to'], $methods_to_update);
+      }
+    }
     $configurations[$name] = $configuration;
     $goto .= "/$name" ;
   }
