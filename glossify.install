@@ -96,3 +96,9 @@ function glossify_schema() {
   );
   return $schema;
 }
+
+function glossify_update_1() {
+  $ret = array();
+  db_add_field($ret, 'glossify', 'configuration', array('type' => 'varchar', 'not null' => TRUE, 'length' => 256));
+  return $ret;
+}

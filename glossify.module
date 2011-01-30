@@ -156,6 +156,36 @@ function glossify_form_alter(&$form, $form_state, $form_id) {
  */
 function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
   switch ($op) {
+    case 'delete':
+
+      // omerida, 9/30/2010: I think it'd be quicker to
+      // remove from the db directly (DELETE FROM {glossify} where nid=%d
+      // but I figured it'd be safer to stick with the module's api
+      // and use _keyword_table function.
+      $configurations = variable_get('glossify_configurations', array());
+      foreach ($configurations as $config_name => $configuration) {
+        if (isset($configuration['to'][$node->type])) {
+          $enabled_styles = array_filter($configuration['style']);
+          $methods = $configuration['methods'];
+          if (isset($methods['use_title'])) {
+            _keyword_table('delete', $node->nid, 'title', $config_name, $node->language);
+          }
+
+          if (isset($methods['use_internal'])) {
+            _keyword_table('delete', $node->nid, 'internal', $config_name, $node->language);
+          }
+
+          if (isset($methods['use_cck'])) {
+            _keyword_table('delete', $node->nid, 'cck', $config_name, $node->language);
+          }
+
+          if (isset($methods['use_taxonomy'])) {
+            _keyword_table('delete', $node->nid, 'taxonomy', $config_name, $node->language);
+          }
+        }
+      }
+      break;
+
     case 'load':
       $glossify_keywords = implode(', ', _fetch_keywords($node->nid, 'internal'));
       $glossify_override = db_result(db_query('SELECT alternate FROM {glossify} WHERE nid = %d', $node->nid));
@@ -179,16 +209,16 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
       $affected_content_types = array();
       $html_body = str_get_html($node->body);
       $html_teaser = str_get_html($node->teaser);
-      foreach ($configurations as $configuration) {
+      foreach ($configurations as $config_name => $configuration) {
         if (in_array($node->type, $configuration['to'])) {
           if ($configuration['methods']['use_title']) {
-            _keyword_table('insert', $node->nid, 'title', $node->language, $node->title);
+            _keyword_table('insert', $node->nid, 'title', $config_name, $node->language, $node->title);
             $keywords[$node->title] = $node->title;
           }
           
           if ($configuration['methods']['use_internal'] && !empty($node->glossify_keywords)) {
             foreach (array_map('trim', explode(',', $node->glossify_keywords)) as $keyword) {
-              _keyword_table('insert', $node->nid, 'internal', $node->language, $keyword, $node->glossify_override);
+              _keyword_table('insert', $node->nid, 'internal', $config_name, $node->language, $keyword, $node->glossify_override);
               $keywords[$keyword] = $keyword;
             }
           }
@@ -197,14 +227,14 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
             $fieldname = $configuration['methods']['keyword_field'];
             $override = $configuration['methods']['override_field'];
             foreach (array_map('trim', explode(',', $node->$fieldname[0]['value'])) as $keyword) {
-              _keyword_table('insert', $node->nid, 'internal', $node->language, $keyword, $node->$override[0]['value']);
+              _keyword_table('insert', $node->nid, 'cck', $config_name, $node->language, $keyword, $node->$override[0]['value']);
               $keywords[$keyword] = $keyword;
             }
           }
           
           if ($configuration['methods']['use_taxonomy']) {
             foreach (array_map('trim', explode(',', $node->taxonomy['tags'][$configuration['methods']['vocabulary']])) as $keyword) {
-              _keyword_table('insert', $node->nid, 'internal', $node->language, $keyword);
+              _keyword_table('insert', $node->nid, 'taxonomy', $config_name, $node->language, $keyword);
               $keywords[$keyword] = $keyword;
             }
           }
@@ -223,26 +253,26 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
       foreach ($configurations as $config_name => $configuration) {
         if (in_array($node->type, $configuration['to'])) {
           if ($configuration['methods']['use_title']) {
-            if (!db_result(db_query("SELECT gtid FROM {glossify} WHERE nid = %d AND method = '%s'", $node->nid, 'title'))) {
-              _keyword_table('insert', $node->nid, 'title', $node->language, $node->title);
+            if (!db_result(db_query("SELECT gtid FROM {glossify} WHERE nid = %d AND method = '%s' AND configuration = '%s'", $node->nid, 'title', $config_name))) {
+              _keyword_table('insert', $node->nid, 'title', $config_name, $node->language, $node->title);
               $keywords[$node->title] = $node->title;
             }
-            elseif (!db_result(db_query("SELECT gtid FROM {glossify} WHERE nid = %d AND method = '%s' AND term = '%s'", $node->nid, 'title', $node->title))) {
-              $keywords = array_merge($keywords, _keyword_table('update', $node->nid, 'title', $node->language, $node->title));
+            elseif (!db_result(db_query("SELECT gtid FROM {glossify} WHERE nid = %d AND method = '%s' AND term = '%s' AND configuration = '%s'", $node->nid, 'title', $node->title, $config_name))) {
+              $keywords = array_merge($keywords, _keyword_table('update', $node->nid, 'title', $config_name, $node->language, $node->title));
               $keywords[$node->title] = $node->title;
             }
           }
           
           if ($configuration['methods']['use_internal']) {
-            $keywords = array_merge($keywords, _fetch_affected_keywords($node, 'internal'));
+            $keywords = array_merge($keywords, _fetch_affected_keywords($node, 'internal', $configuration));
           }
           
           if ($configuration['methods']['use_cck']) {
-            $keywords = array_merge($keywords, _fetch_affected_keywords($node, 'cck', $configuration['methods']['keyword_field'], $configuration['methods']['override_field']));
+            $keywords = array_merge($keywords, _fetch_affected_keywords($node, 'cck', $configuration, $configuration['methods']['keyword_field'], $configuration['methods']['override_field']));
           }
           
           if ($configuration['methods']['use_taxonomy']) {
-            $keywords = array_merge($keywords, _fetch_affected_keywords($node, 'taxonomy', $configuration['methods']['vocabulary']));
+            $keywords = array_merge($keywords, _fetch_affected_keywords($node, 'taxonomy', $configuration, $configuration['methods']['vocabulary']));
           }
           
           $affected_content_types[$config_name] = array_merge($affected_content_types, $configuration['from']);
@@ -256,11 +286,14 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
       $referenced_terms = array();
       foreach ($configurations as $config_name => $configuration) {
         if (in_array($node->type, $configuration['from'])) {
-          $possible_keywords = _fetch_possible_keywords($configuration, $node->nid);
-          if (in_array('reference', $configuration['style']) && $configuration['style']['reference']) {
-            foreach ($possible_keywords as $term_title => $path) {
-              if ($configuration['break']) {
-                if (preg_match('/\b' . $term_title . '\b/', $node->body)) {
+          $enabled_styles = array_filter($configuration['style']);
+          $possible_keywords = _fetch_possible_keywords($config_name, $configuration, $node->nid);
+          $modifiers = _fetch_modifiers($configuration);
+          if (in_array('reference', $enabled_styles)) {
+            foreach ($possible_keywords as $kwd) {
+              list($term_title, $path) = $kwd;
+              if ($configuration['break'] && $configuration['unicode']) {
+                if (preg_match('/(?<![\pL\pN_])' . preg_quote($term_title, '/') . '(?![\pL\pN_])/'.$modifiers, $node->body)) {
                   if (!in_array($path, $referenced_terms)) {
                     $term_definition_list .= theme('glossify_term', $path, 'reference');
                     $referenced_terms[] = $path;
@@ -268,7 +301,7 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
                 }
               }
               else {
-                if (preg_match('/' . $term_title . '/', $node->body)) {
+                if (preg_match('/'.($configuration['break']?'\b'.$term_title.'\b':$term_title).'/'.$modifiers, $node->body)) {
                   if (!in_array($path, $referenced_terms)) {
                     $term_definition_list .= theme('glossify_term', $path, 'reference');
                     $referenced_terms[] = $path;
@@ -278,9 +311,10 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
             }
           }
           if (in_array('hovertip', $configuration['style']) && $configuration['style']['hovertip']) {
-            foreach ($possible_keywords as $term_title => $path) {
-              if ($configuration['break']) {
-                if (preg_match('/\b' . $term_title . '\b/', $node->body)) {
+            foreach ($possible_keywords as $kwd) {
+              list($term_title, $path) = $kwd;
+              if ($configuration['break'] && $configuration['unicode']) {
+                if (preg_match('/(?<![\pL\pN_])' . preg_quote($term_title, '/') . '(?![\pL\pN_])/'.$modifiers, $node->body)) {
                   $node->content['glossify_hovertip'][$term_title] = array(
                     '#value' => theme('glossify_term', $path, 'hovertip'),
                     '#weight' => 10,
@@ -289,7 +323,7 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
                 }
               }
               else {
-                if (preg_match('/' . $term_title . '/', $node->body)) {
+                if (preg_match('/'.($configuration['break']?'\b'.$term_title.'\b':$term_title).'/'.$modifiers, $node->body)) {
                   $node->content['glossify_hovertip'][$term_title] = array(
                     '#value' => theme('glossify_term', $path, 'hovertip'),
                     '#weight' => 10,
@@ -316,6 +350,8 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
  * Implementation of hook_filter().
  */
 function glossify_filter($op, $delta = 0, $format = -1, $text = '', $cache_id = 0) {
+  static $configurations;
+
   switch ($op) {
     case 'list':
       return array(0 => t('Glossify filter'));
@@ -327,26 +363,45 @@ function glossify_filter($op, $delta = 0, $format = -1, $text = '', $cache_id = 
       return $text;
 
     case 'process':
+      // TODO: option should be to only do this on a node page
+      // or have a list of paths where this filter will not be invoked
       if (($node = menu_get_object()) == NULL) {
         $q = db_query("SELECT nid FROM {node_revisions} WHERE '%s'=CONCAT(format, ':', MD5(body))", $cache_id);
         $r = db_fetch_object($q);
-        $node = node_load($r->nid);
+        if ($r->nid) {
+          $node = node_load($r->nid);
+        } else {
+          // have to return something so that we don't lose output
+          return $text;
+        }
       }
-      $configurations = variable_get('glossify_configurations', array());
+
+      if (!isset($configurations)) {
+        $configurations = variable_get('glossify_configurations', array());
+      }
+
       $html_body = str_get_html($text);
       foreach ($configurations as $config_name => $configuration) {
-        if (in_array($node->type, $configuration['from'])) {
-          foreach (_fetch_possible_keywords($configuration, $node->nid) as $term_title => $target_url) {
-            foreach ($configuration['style'] as $style => $enabled) {
-              if ($enabled) {
-                if (isset($old_body) && $old_body !== $html_body->innertext) {
-                  $html_body = str_get_html($html_body->innertext);
+        if (isset($configuration['from'][$node->type]) && ($configuration['style']['hovertip'] || $configuration['style']['links'])) {  // We only want to replace stuff for links and hovertip styles
+          $enabled_styles = array_filter($configuration['style']);
+          foreach (_fetch_possible_keywords($config_name, $configuration, $node->nid) as $kwd) {
+            list($term_title, $target_url) = $kwd;
+            $replaced = 0;
+            if (($configuration['link_self'] == 1) || (($configuration['link_self'] == 0) && ($term_title !== $node->title))) {
+              foreach ($enabled_styles as $style => $enabled) {
+                if (!empty($term_title) && false !== strpos($html_body->innertext, $term_title)) {
+                  if (isset($configuration['excl_tags']) && !empty($configuration['excl_tags'])) {
+                    $html_tags = preg_split("/\r\n|\r|\n|,/", $configuration['excl_tags']);
+                    $config['excl_tags'] = array_combine($html_tags, $html_tags);
+                  }
+                  
+                  $replacement = _fetch_replacement($style, $term_title, $target_url);
+                  _glossify_replace($configuration, $html_body, $term_title, $replacement, $replaced);
+                  // update the state of the DOM to reflect new tags added.
+                  if (0 < $replaced) {
+                    $html_body = str_get_html($html_body->innertext);
+                  }
                 }
-                
-                $replacement = _fetch_replacement($style, $term_title, $target_url);
-                $old_body = $html_body->innertext;
-                $replaced = 0;
-                _glossify_replace($configuration, $html_body, $term_title, $replacement, $replaced);
               }
             }
           }
@@ -361,25 +416,56 @@ function glossify_filter($op, $delta = 0, $format = -1, $text = '', $cache_id = 
 
 
 /**
+ * Helper function that emulates a contributing module's nodeapi load operation
+ * @param stdObject
+ * @param module
+ */
+function _glossify_node_load(&$node, $module) {
+  $fn = $module . '_nodeapi';
+  $result = $fn($node, 'load');
+  if ($result) {  // The content module seems to produce no output with the load operation
+    foreach ($result as $key => $value) {
+      $node->$key = $value;
+    }    
+  }
+}
+
+
+/**
  * Helper function that fetches and returns the styled term depending on the style and term.
  */
 function _glossify_replace($configuration, &$html, $term_title, $replacement, &$replaced) {
-  if (count($html->childNodes()) > 0) {
-    foreach ($html->childNodes() as $child_node) {
-      _glossify_replace($configuration, $child_node, $term_title, $replacement, $replaced);
+  $modifiers = _fetch_modifiers($configuration);
+  $text_nodes = $html->find('text');
+  foreach ($text_nodes as $node) {
+    /*
+    if ('a' == $node->parent->tag) { I disabled this to allow for multiple methods
+      continue;
     }
-  }
-  else {
-    if (isset($html->tag) && $html->tag !== 'root') {
-      if ($configuration['only_first'] && $replaced == 0) {
-        if ($configuration['break']) {
-          $html->innertext = preg_replace('/\b'.$term_title.'\b/', $replacement, $html->innertext, ($configuration['only_first'] ? 1 : -1), $temp_replaced);
+    */
+
+    if (!isset($node->parent->tag) || ($configuration['excl_mode'] == 0 && !isset($configuration['excl_tags'][$node->parent->tag])) || ($configuration['excl_mode'] == 1 && isset($configuration['excl_tags'][$node->parent->tag]))) {
+      if ($configuration['only_first']) {
+        if (0 == $replaced) {
+          if ($configuration['break'] && $configuration['unicode']) {
+            $node->innertext = preg_replace('/(?<![\pL\pN_])' . preg_quote($term_title, '/') . '(?![\pL\pN_])/'.$modifiers, $replacement, $node->innertext, ($configuration['only_first'] ? 1 : -1), $temp_replaced);
+          }
+          else {
+            $node->innertext = preg_replace('/'.($configuration['break']?'\b'.$term_title.'\b':$term_title).'/'.$modifiers, $replacement, $node->innertext, ($configuration['only_first'] ? 1 : -1), $temp_replaced);
+          }
+        }
+      }
+      else {
+        if ($configuration['break'] && $configuration['unicode']) {
+          $node->innertext = preg_replace('/(?<![\pL\pN_])' . preg_quote($term_title, '/') . '(?![\pL\pN_])/'.$modifiers, $replacement, $node->innertext, ($configuration['only_first'] ? 1 : -1), $temp_replaced);
         }
         else {
-          $html->innertext = preg_replace('/'.$term_title.'/', $replacement, $html->innertext, ($configuration['only_first'] ? 1 : -1), $temp_replaced);
+          $node->innertext = preg_replace('/'.($configuration['break']?'\b'.$term_title.'\b':$term_title).'/'.$modifiers, $replacement, $node->innertext, ($configuration['only_first'] ? 1 : -1), $temp_replaced);
         }
-        $replaced = $temp_replaced;
       }
+    }
+    if ($temp_replaced > 0) {
+      $replaced = $temp_replaced;
     }
   }
 }
@@ -403,8 +489,13 @@ function _fetch_replacement($style, $term_title, $target_url) {
 /**
  * Helper function that fetches and returns an array of all keywords of a node, or just the ones for a specific method.
  */
-function _fetch_keywords($nid, $method = FALSE) {
-  $q = db_query("SELECT term, method FROM {glossify} WHERE nid = %d ORDER BY term", $nid);
+function _fetch_keywords($nid, $method = FALSE, $configuration = NULL) {
+  if (!$configuration) {
+    $q = db_query("SELECT term, method FROM {glossify} WHERE nid = %d ORDER BY term", $nid);
+  }
+  else {
+    $q = db_query("SELECT term, method FROM {glossify} WHERE nid = %d AND configuration = '%s' ORDER BY term", $nid, $configuration);
+  }
   $glossary = array();
   while ($r = db_fetch_array($q)) {
     if ($method) {
@@ -423,25 +514,25 @@ function _fetch_keywords($nid, $method = FALSE) {
 /**
  * Helper function that performs operations on the Glossify keyword-table and returns the new, old or removed values, depending on the operation.
  */
-function _keyword_table($operation, $nid, $method, $language = '', $term = '', $alternate = '') {
+function _keyword_table($operation, $nid, $method, $configuration = 'global', $language = '', $term = '', $alternate = '') {
   switch ($operation) {
     case 'insert':
-      $gnid = db_result(db_query("SELECT nid FROM {glossify} WHERE term = '%s' AND language = '%s'", $term, $language));
+      $gnid = db_result(db_query("SELECT nid FROM {glossify} WHERE term = '%s' AND language = '%s' AND method = '%s'", $term, $language, $method));
       $new_terms = array();
       if (!$gnid) {
-        db_query("INSERT INTO {glossify} (nid, term, language, method, alternate) VALUES (%d, '%s', '%s', '%s', '%s')", $nid, $term, $language, $method, $alternate);
+        db_query("INSERT INTO {glossify} (nid, term, language, method, alternate, configuration) VALUES (%d, '%s', '%s', '%s', '%s', '%s')", $nid, $term, $language, $method, $alternate, $configuration);
         $new_terms[$term] = $term;
       }
       else {
         $node = node_load($gnid);
-        drupal_set_message(t("Keyword: '%term' already exists for <a href=\"/node/$node->nid\">%title</a>", array('%term' => $term, '%title' => $node->title)), 'warning');
+        drupal_set_message(t("The keyword: '%term' for the %method-method was already assigned to point to <a href=\"/node/$node->nid\">%title</a>", array('%term' => $term, '%title' => $node->title, '%method' => $method)), 'warning');
       }
       return $new_terms;
       break;
     
     case 'update':
       $old_term = db_result(db_query("SELECT term FROM {glossify} WHERE nid = %d AND method = '%s'", $nid, 'title'));
-      db_query("UPDATE {glossify} SET term = '%s', language = '%s', method = '%s' WHERE nid = %d AND method = '%s'", $term, $language, $method, $nid, 'title');
+      db_query("UPDATE {glossify} SET term = '%s', language = '%s', method = '%s' WHERE nid = %d AND method = '%s' AND configuration = '%s'", $term, $language, $method, $nid, 'title', $configuration);
       return array($old_term => $old_term);
       break;
     
@@ -449,14 +540,14 @@ function _keyword_table($operation, $nid, $method, $language = '', $term = '', $
       $old_terms = array();
       if (!empty($term)) {
         $old_terms[$term] = $term;
-        db_query("DELETE FROM {glossify} WHERE nid = %d AND method = '%s' AND language = '%s' AND term = '%s'", $nid, $method, $language, $term);
+        db_query("DELETE FROM {glossify} WHERE nid = %d AND method = '%s' AND language = '%s' AND term = '%s' AND configuration = '%s'", $nid, $method, $language, $term, $configuration);
       }
       else{
-        $q = db_query("SELECT term FROM {glossify} WHERE nid = %d AND method = '%s' ORDER BY term", $nid, $method);
+        $q = db_query("SELECT term FROM {glossify} WHERE nid = %d AND method = '%s' AND configuration = '%s' ORDER BY term", $nid, $method, $configuration);
         while ($r = db_fetch_array($q)) {
           $old_terms[$r['term']] = $r['term'];
         }
-        db_query("DELETE FROM {glossify} WHERE nid = %d AND method = '%s'", $nid, $method);
+        db_query("DELETE FROM {glossify} WHERE nid = %d AND method = '%s' AND configuration = '%s'", $nid, $method, $configuration);
       }
       return $old_terms;
       break;
@@ -467,10 +558,11 @@ function _keyword_table($operation, $nid, $method, $language = '', $term = '', $
 
 /**
  * Helper function that fetches and returns an array of all new and old keywords of a node, depending on the method.
+ * It also provides for an easy way to update the keywords of a given method/configuration combination.
  */
-function _fetch_affected_keywords($node, $method, $keywordsource = NULL, $override = '') {
+function _fetch_affected_keywords($node, $method, $configuration = 'global', $keywordsource = NULL, $override = '') {
   $keywords = array();
-  $existing_keywords = _fetch_keywords($node->nid, $method);
+  $existing_keywords = _fetch_keywords($node->nid, $method, $configuration);
   switch ($method) {
     case 'internal':
       $form_keywords = !empty($node->glossify_keywords)? array_map('trim', explode(',', $node->glossify_keywords)) : array();
@@ -479,9 +571,13 @@ function _fetch_affected_keywords($node, $method, $keywordsource = NULL, $overri
     case 'cck':
       $keyword = $node->$keywordsource;
       $override = $node->$override;
-      if (isset($keyword[0]['value']) && isset($override[0]['value'])) {
+      if (isset($keyword[0]['value'])) {
         $form_keywords = !empty($keyword[0]['value'])? array_map('trim', explode(',', $keyword[0]['value'])) : array();
+      }
+      if (isset($override[0]['value'])) {
         $form_override = $override[0]['value'];
+      } else {
+        $form_override = '';
       }
       break;
     case 'taxonomy':
@@ -504,23 +600,23 @@ function _fetch_affected_keywords($node, $method, $keywordsource = NULL, $overri
         $ikwds3 = array_intersect($ikwds1, $ikwds2);
         if (count($ikwds3) == 0) {
           foreach ($ikwds1 as $keyword) {
-            $keywords = array_merge($keywords, _keyword_table('delete', $node->nid, $method, $node->language, $keyword));
+            $keywords = array_merge($keywords, _keyword_table('delete', $node->nid, $method, $configuration, $node->language, $keyword));
           }
           foreach ($ikwds2 as $keyword) {
-            $keywords = array_merge($keywords, _keyword_table('insert', $node->nid, $method, $node->language, $keyword, $form_override));
+            $keywords = array_merge($keywords, _keyword_table('insert', $node->nid, $method, $configuration, $node->language, $keyword, $form_override));
           }
         }
       }
     }
     else{
       foreach ($form_keywords as $keyword) {
-        $keywords = array_merge($keywords, _keyword_table('insert', $node->nid, $method, $node->language, $keyword, $form_override));
+        $keywords = array_merge($keywords, _keyword_table('insert', $node->nid, $method, $configuration, $node->language, $keyword, $form_override));
       }
     }
   }
   else {
     if (count($existing_keywords) > 0) {
-      $keywords = array_merge($keywords, _keyword_table('delete', $node->nid, $method));
+      $keywords = array_merge($keywords, _keyword_table('delete', $node->nid, $method, $configuration));
     }
   }
   return $keywords;
@@ -545,38 +641,54 @@ function _fetch_affected_nodes($keywords, $content_types) {
 /**
  * Helper function that fetches the possible keywords for a given configuration and nid.
  */
-function _fetch_possible_keywords($configuration, $nid) {
+function _fetch_possible_keywords($config_name, $configuration, $nid) {
   $glossify_dict = array();
-  $methods = array("'title'");
+  $methods = array();
+  if ($configuration['methods']['use_title']) {
+    $methods[] = 'title';
+  }
   if ($configuration['methods']['use_internal']) {
-    $methods[] = "'internal'";
+    $methods[] = 'internal';
   }
   if ($configuration['methods']['use_cck']) {
-    $methods[] = "'cck'";
+    $methods[] = 'cck';
   }
   if ($configuration['methods']['use_taxonomy']) {
-    $methods[] = "'taxonomy'";
+    $methods[] = 'taxonomy';
   }
+  $query = "SELECT g.term, g.nid, g.alternate, g.language, g.method FROM {node} n INNER JOIN {glossify} g ON g.nid = n.nid WHERE n.type IN (". db_placeholders($configuration['to'], 'varchar') .") AND g.method IN (". db_placeholders($methods, 'varchar') .") AND g.configuration = '%s' AND n.status = 1";
+  
   if ($configuration['language']) {
-    $q = db_query("SELECT g.term, g.nid, g.alternate, g.language FROM {node} n INNER JOIN {glossify} g ON g.nid = n.nid WHERE g.language = n.language AND n.type IN (". db_placeholders($configuration['to'], 'varchar') .") AND g.nid != %d AND g.method IN (". implode(', ', $methods) .")", $configuration['to'], $nid);
+    $query .= " AND g.language = n.language";
+  }
+  if (!$configuration['link_self']) {
+    $query .= " AND g.nid != %d";
+    $q = db_query($query, array_merge($configuration['to'], $methods, (array) $config_name, (array) $nid));    
   }
   else {
-    $q = db_query("SELECT g.term, g.nid, g.alternate, g.language FROM {node} n INNER JOIN {glossify} g ON g.nid = n.nid WHERE n.type IN (". db_placeholders($configuration['to'], 'varchar') .") AND g.nid != %d AND g.method IN (". implode(', ', $methods) .")", $configuration['to'], $nid);
+    $q = db_query($query, array_merge($configuration['to'], $methods, (array) $config_name));
   }
+
   while ($r = db_fetch_array($q)) {
-    if (!empty($r['alternate'])) {
-      if (is_numeric($r['alternate'])) {
-        $glossify_dict[$r['term']] = drupal_lookup_path('alias', 'node/'.$r['alternate'], $r['language']);
-      }
-      elseif ($path = drupal_lookup_path('alias', $r['alternate'], $r['language'])) {
-        $glossify_dict[$r['term']] = $path;
-      }
-      else {
-        $glossify_dict[$r['term']] = $r['alternate'];
-      }
+    if ($configuration['methods']['link_term'] && $r['method'] == 'taxonomy') {
+      $term = db_fetch_array(db_query("SELECT tid FROM {term_data} WHERE name = '%s'", $r['term']));
+      $glossify_dict[] = array($r['term'], drupal_lookup_path('alias', 'taxonomy/term/'.$term['tid'], $r['language']));
     }
     else {
-      $glossify_dict[$r['term']] = drupal_lookup_path('alias', 'node/'.$r['nid'], $r['language']);
+      if (!empty($r['alternate'])) {
+        if (is_numeric($r['alternate'])) {
+          $glossify_dict[] = array($r['term'], drupal_lookup_path('alias', 'node/'.$r['alternate'], $r['language']));
+        }
+        elseif ($path = drupal_lookup_path('alias', $r['alternate'], $r['language'])) {
+          $glossify_dict[] = array($r['term'], $path);
+        }
+        else {
+          $glossify_dict[] = array($r['term'], $r['alternate']);
+        }
+      }
+      else {
+        $glossify_dict[] = array($r['term'], drupal_lookup_path('alias', 'node/'.$r['nid'], $r['language']));
+      }
     }
   }
   
@@ -587,43 +699,76 @@ function _fetch_possible_keywords($configuration, $nid) {
 /**
  * Helper function that updates the keyword-tables according to the new/old methods.
  */
-function _update_keywords_for_methods($content_types, $methods) {
-  $q = db_query("SELECT nid FROM {node} WHERE type IN (". db_placeholders($content_types, 'varchar') .")", $content_types);
-  while ($r = db_fetch_array($q)) {
-    $node = node_load($r['nid'], NULL, TRUE);
+function _update_keywords_for_methods($content_types, $methods, $configuration) {
+  $q = db_query("SELECT nid, vid, type, title, language FROM {node} WHERE status=1 AND type IN (". db_placeholders($content_types, 'varchar') .")", $content_types);
+  while ($node = db_fetch_object($q)) {
     if (isset($methods['title'])) {
       if ($methods['title']) {
-        _keyword_table('insert', $node->nid, 'title', $node->language, $node->title);
+        _keyword_table('insert', $node->nid, 'title', $configuration, $node->language, $node->title);
       }
       else {
-        _keyword_table('delete', $node->nid, 'title', $node->language);
+        _keyword_table('delete', $node->nid, 'title', $configuration, $node->language);
       }
     }
     if (isset($methods['internal'])) {
+      _glossify_node_load($node, 'glossify');
       if ($methods['internal']['use_internal']) {
-        _fetch_affected_keywords($node, 'internal');
+        _fetch_affected_keywords($node, 'internal', $configuration);
       }
       else {
-        _keyword_table('delete', $node->nid, 'internal', $node->language);
+        _keyword_table('delete', $node->nid, 'internal', $configuration, $node->language);
       }
     }
     if (isset($methods['cck'])) {
+      _glossify_node_load($node, 'content');
       if ($methods['cck']['use_cck']) {
-        _fetch_affected_keywords($node, 'cck', $methods['cck']['keyword_field'], $methods['cck']['override_field']);
+        _fetch_affected_keywords($node, 'cck', $configuration, $methods['cck']['keyword_field'], $methods['cck']['override_field']);
       }
       else {
-        _keyword_table('delete', $node->nid, 'cck', $node->language);
+        _keyword_table('delete', $node->nid, 'cck', $configuration, $node->language);
       }
     }
+
     if (isset($methods['taxonomy'])) {
+      _glossify_node_load($node, 'taxonomy');
       if ($methods['taxonomy']['use_taxonomy']) {
-        _fetch_affected_keywords($node, 'taxonomy', $methods['taxonomy']['vocabulary']);
+        _fetch_affected_keywords($node, 'taxonomy', $configuration, $methods['taxonomy']['vocabulary']);
       }
       else {
-        _keyword_table('delete', $node->nid, 'taxonomy', $node->language);
+        _keyword_table('delete', $node->nid, 'taxonomy', $configuration, $node->language);
       }
     }
   }
+}
+
+
+/**
+ * Helper function that returns the modifiers of a given configuration
+ */
+function _fetch_modifiers($configuration) {
+  $modifiers = '';
+  if ($configuration['unicode']) {
+    $modifiers .= 'u';
+  }
+  if ($configuration['case_insensitivity']) {
+    $modifiers .= 'i';
+  }
+  return $modifiers;
+}
+
+
+/**
+ * Helper function that returns the configurations with the same to-content-types
+ */
+function _check_for_configuration_conflicts($configurations, $content_types, $method) {
+  foreach ($configurations as $configuration) {
+    if (count(array_intersect($content_types, $configuration['to'])) > 0) {
+      if ($configuration['methods'][$method]) {
+        return FALSE;
+      }
+    }
+  }
+  return TRUE;
 }
 
 

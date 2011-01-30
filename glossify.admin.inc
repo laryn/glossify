@@ -36,37 +36,20 @@ function glossify_admin_settings() {
   
   $form['from'] = array(
     '#type' => 'select',
-    '#title' => t('"Link-FROM" content types - We look for keywords into their text and replace them with links'),
+    '#title' => t('Content types to be filtered'),
     '#multiple' => TRUE,
     '#options' => node_get_types('names'),
     '#default_value' => $configuration['from'],
+    '#description' => t('Glossify looks into their text for keywords and replaces them with links.'),
   );
   
   $form['to'] = array(
     '#type' => 'select',
-    '#title' => t('"Link-TO" content types. (node-title = keyword)'),
+    '#title' => t('Target content types.'),
     '#multiple' => TRUE,
     '#options' => node_get_types('names'),
     '#default_value' => $configuration['to'],
-  );
-    
-  $form['only_first'] = array(
-    '#type' => 'checkbox',
-    '#title' => t('Only link first occurance of term. On by default. If unchecked all occurences are replaced.'),
-    '#default_value' => $configuration['only_first'],
-  );
-
-  $form['unicode'] = array(
-    '#type' => 'checkbox',
-    '#title' => t('Do we need Unicode compatibility?. Check this if you need Unicode support. If not checked, non-latin words would not get autolinked.<br>
-                   If you get php warnings with this setting=On - then please update/fix your PCRE PHP-library.'),
-    '#default_value' => $configuration['unicode'],
-  );
-  
-  $form['teaser'] = array(
-    '#type' => 'checkbox',
-    '#title' => t('Link content in teaser'),
-    '#default_value' => $configuration['teaser'],
+    '#description' => t('The source(s) for the keywords.'),
   );
   
   $form['style'] = array(
@@ -81,16 +64,56 @@ function glossify_admin_settings() {
     '#description' => t('How the glossary should be styled. Note: "hovertip" style requires hovertip.module. If you choose anything other than links - it should work but for now it is untested territory - feedback welcome.'),
   );
   
-  $form['break'] = array(
+  $form['switches'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Switches'),
+    '#collapsible' => TRUE,
+  );
+  
+  $form['switches']['only_first'] = array(
     '#type' => 'checkbox',
-    '#title' => t('Check this to NOT break words. This means that the keyword "bla" will not linkify the bla-part of "blade". We use this regexp to make this work: "/\b$keyword_term\b/".'),
-    '#default_value' => $configuration['break'],
+    '#title' => t('Only link first occurance of term. On by default. If unchecked all occurences are replaced.'),
+    '#default_value' => $configuration['only_first'],
   );
 
-  $form['language'] = array(
+  $form['switches']['unicode'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Unicode compatibility.'),
+    '#default_value' => $configuration['unicode'],
+    '#description' => t('If you get php warnings from this setting, try updating your PCRE PHP-library.'),
+  );
+  
+  $form['switches']['break'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Check this to NOT break words.'),
+    '#default_value' => $configuration['break'],
+    '#description' => t('Example: "ship" will not linkify "shipyard", "starship", ...'),
+  );
+  
+  $form['switches']['case_insensitivity'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Case insensitivity.'),
+    '#default_value' => $configuration['case_insensitivity'],
+    '#description' => t('Example: "drupal" will also linkify "Drupal".'),
+  );
+
+  $form['switches']['link_self'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Link to self.'),
+    '#default_value' => $configuration['link_self'],
+  );
+  
+  $form['switches']['language'] = array(
     '#type' => 'checkbox',
     '#title' => t('Link only to same language.'),
     '#default_value' => $configuration['language'],
+  );
+  
+  $form['switches']['teaser'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Link content in teaser'),
+    '#default_value' => $configuration['teaser'],
+    '#description' => t('Currently disfunctional.'),
   );
   
   $form['methods'] = array(
@@ -195,8 +218,37 @@ function glossify_admin_settings() {
       '#default_value' => $configuration['methods']['vocabulary'],
       '#description' => t('Select a Vocabulary for synonyms.'),
     );
+    
+    $form['methods']['taxonomy']['link_term'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Link to term instead of node.'),
+      '#default_value' => $configuration['methods']['link_term'],
+    );
   }
+  
+  $form['excl'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Exclude/Include'),
+    '#collapsible' => TRUE,
+    '#collapsed' => empty($configuration['excl_tags'])? TRUE : FALSE,
+  );
+  
+  $form['excl']['excl_mode'] = array(
+    '#type' => 'select',
+    '#title' => t('Use Exclude- or Include-Method'),
+    '#options' => array(t('Exclude'), t('Include')),
+    '#default_value' => $configuration['excl_mode'],
+  );
+  
+  $form['excl']['excl_tags'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Tags to exclude/include.'),
+    '#default_value' => $configuration['excl_tags'],
+    '#description' => t('One tag per line, or comma seperated.'),
+  );
+  
   $form['buttons']['submit'] = array('#type' => 'submit', '#value' => t('Save configuration') );
+  
   if (in_array($conf_key, array('add','global'))) {
     $form['buttons']['reset'] = array('#type' => 'submit', '#value' => t('Reset to defaults') );
   }
@@ -248,7 +300,7 @@ function glossify_admin_settings_validate($form, &$form_state) {
  */
 function glossify_admin_settings_submit($form, &$form_state) {
   $configurations = variable_get('glossify_configurations', array());
-  $goto = '/admin/settings/glossify';
+  $goto = 'admin/settings/glossify';
   if ($form_state['clicked_button']['#value'] == t('Delete configuration') && $form_state['values']['config_id'] !== 'global') {
     unset($configurations[$form_state['values']['name']]);
   }
@@ -261,6 +313,7 @@ function glossify_admin_settings_submit($form, &$form_state) {
       'override_field' => $form_state['values']['override_field'],
       'use_taxonomy' => $form_state['values']['use_taxonomy'],
       'vocabulary' => $form_state['values']['vocabulary'],
+      'link_term' => $form_state['values']['link_term'],
     );
     $configuration = array(
       'from' => $form_state['values']['from'],
@@ -269,8 +322,12 @@ function glossify_admin_settings_submit($form, &$form_state) {
       'unicode' => $form_state['values']['unicode'],
       'teaser' => $form_state['values']['teaser'],
       'style' => $form_state['values']['style'],
+      'link_self' => $form_state['values']['link_self'],
+      'case_insensitivity' => $form_state['values']['case_insensitivity'],
       'break' => $form_state['values']['break'],
       'language' => $form_state['values']['language'],
+      'excl_mode' => $form_state['values']['excl_mode'],
+      'excl_tags' => $form_state['values']['excl_tags'],
       'methods' => $methods,
     );
     $name = empty($form_state['values']['name']) ? 'global' : $form_state['values']['name'];
@@ -289,12 +346,13 @@ function glossify_admin_settings_submit($form, &$form_state) {
         $methods_to_update['cck'] = array('use_cck' => $methods['use_cck'], 'keyword_field' => $methods['keyword_field'], 'override_field' => $methods['override_field']);
         drupal_set_message('CCK-keywords were updated.', 'status');
       }
-      if (($last_methods['use_taxonomy'] !== $methods['use_taxonomy']) || ($last_methods['vocabulary'] !== $methods['vocabulary'])) {
+      if (($last_methods['use_taxonomy'] !== $methods['use_taxonomy']) || ($last_methods['vocabulary'] !== $methods['vocabulary']) || ($last_methods['link_term'] !== $methods['link_term'])) {
         $methods_to_update['taxonomy'] = array('use_taxonomy' => $methods['use_taxonomy'], 'vocabulary' => $methods['vocabulary']);
         drupal_set_message('Taxonomy-keywords were updated.', 'status');
       }
       if (count($methods_to_update) > 0) {
-        _update_keywords_for_methods($configuration['to'], $methods_to_update);
+        unset($configurations[$name]);
+        _update_keywords_for_methods($configuration['to'], $methods_to_update, $name);
       }
     }
     $configurations[$name] = $configuration;
