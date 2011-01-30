@@ -586,7 +586,7 @@ function _fetch_affected_keywords($node, $method, $configuration = 'global', $ke
         $form_keywords = array();
         foreach ($node->taxonomy['tags'] as $vid => $tag) {
           if (in_array($vid, $keywordsource)) {
-            $form_keywords[] = trim($tag);
+            $form_keywords = array_merge($form_keywords, array_map('trim', explode(',', $tag)));
           }
         }
         $form_override = $override;
@@ -601,11 +601,9 @@ function _fetch_affected_keywords($node, $method, $configuration = 'global', $ke
         $ikwds3 = array_intersect($ikwds1, $ikwds2);
         if (count($ikwds3) == 0) {
           foreach ($ikwds1 as $keyword) {
-            dpm(array($keywords, 'delete', $node->nid, $method, $configuration, $node->language, $keyword));
             $keywords = array_merge($keywords, _keyword_table('delete', $node->nid, $method, $configuration, $node->language, $keyword));
           }
           foreach ($ikwds2 as $keyword) {
-            dpm(array($keywords, 'insert', $node->nid, $method, $configuration, $node->language, $keyword, $form_override));
             $keywords = array_merge($keywords, _keyword_table('insert', $node->nid, $method, $configuration, $node->language, $keyword, $form_override));
           }
         }
