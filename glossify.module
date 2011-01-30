@@ -264,15 +264,15 @@ function glossify_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
           }
           
           if ($configuration['methods']['use_internal']) {
-            $keywords = array_merge($keywords, _fetch_affected_keywords($node, 'internal', $configuration));
+            $keywords = array_merge($keywords, _fetch_affected_keywords($node, 'internal', $config_name));
           }
           
           if ($configuration['methods']['use_cck']) {
-            $keywords = array_merge($keywords, _fetch_affected_keywords($node, 'cck', $configuration, $configuration['methods']['keyword_field'], $configuration['methods']['override_field']));
+            $keywords = array_merge($keywords, _fetch_affected_keywords($node, 'cck', $config_name, $configuration['methods']['keyword_field'], $configuration['methods']['override_field']));
           }
           
           if ($configuration['methods']['use_taxonomy']) {
-            $keywords = array_merge($keywords, _fetch_affected_keywords($node, 'taxonomy', $configuration, $configuration['methods']['vocabulary']));
+            $keywords = array_merge($keywords, _fetch_affected_keywords($node, 'taxonomy', $config_name, $configuration['methods']['vocabulary']));
           }
           
           $affected_content_types[$config_name] = array_merge($affected_content_types, $configuration['from']);
@@ -515,6 +515,7 @@ function _fetch_keywords($nid, $method = FALSE, $configuration = NULL) {
  * Helper function that performs operations on the Glossify keyword-table and returns the new, old or removed values, depending on the operation.
  */
 function _keyword_table($operation, $nid, $method, $configuration = 'global', $language = '', $term = '', $alternate = '') {
+  //dpm(array($operation, $nid, $method, $configuration, $language, $term, $alternate));
   switch ($operation) {
     case 'insert':
       $gnid = db_result(db_query("SELECT nid FROM {glossify} WHERE term = '%s' AND language = '%s' AND method = '%s'", $term, $language, $method));
@@ -583,9 +584,9 @@ function _fetch_affected_keywords($node, $method, $configuration = 'global', $ke
     case 'taxonomy':
       if (isset($node->taxonomy)) {
         $form_keywords = array();
-        foreach ($node->taxonomy as $tag) {
-          if (in_array($tag->vid, $keywordsource)) {
-            $form_keywords[] = trim($tag->name);
+        foreach ($node->taxonomy['tags'] as $vid => $tag) {
+          if (in_array($vid, $keywordsource)) {
+            $form_keywords[] = trim($tag);
           }
         }
         $form_override = $override;
@@ -600,9 +601,11 @@ function _fetch_affected_keywords($node, $method, $configuration = 'global', $ke
         $ikwds3 = array_intersect($ikwds1, $ikwds2);
         if (count($ikwds3) == 0) {
           foreach ($ikwds1 as $keyword) {
+            dpm(array($keywords, 'delete', $node->nid, $method, $configuration, $node->language, $keyword));
             $keywords = array_merge($keywords, _keyword_table('delete', $node->nid, $method, $configuration, $node->language, $keyword));
           }
           foreach ($ikwds2 as $keyword) {
+            dpm(array($keywords, 'insert', $node->nid, $method, $configuration, $node->language, $keyword, $form_override));
             $keywords = array_merge($keywords, _keyword_table('insert', $node->nid, $method, $configuration, $node->language, $keyword, $form_override));
           }
         }
