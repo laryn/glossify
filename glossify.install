@@ -91,6 +91,10 @@ function glossify_schema() {
         'type' => 'varchar',
         'not null' => TRUE,
         'length' => 256),
+      'configuration' => array(
+        'type' => 'varchar',
+        'not null' => TRUE,
+        'length' => 256),
     ),
     'primary key' => array('gtid'),
   );
