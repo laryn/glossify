@@ -1,14 +1,6 @@
 name = Glossify
-description = Automatically links nodes in your site according to your settings - parses node bodies searching for titles of another nodes.
-package = Filter
-dependencies[] = simplehtmldom
-
-core = 6.x
-
-
-; Information added by drupal.org packaging script on January 1, 1970 - 00:00
-version = "6.x-3.0-beta5"
-core = "6.x"
-project = "glossify"
-datestamp = "1296400898"
-
+description = "Automatically links content to other content or taxonomy."
+package = "Input filters"
+dependencies[] = filter
+core = 7.x
+configure = admin/config/content/formats

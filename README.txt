@@ -1,36 +1,35 @@
+Glossify.module
+---------------
 
-glossify.module
----------------------------------------------------------------------------
+The Glossify module provides filters that scan and parse content and replace terms in the text with
+links to their pages. The d7 version is a complete rewrite of the module to be as simple and 
+performant as possible. It consists of 2 filters:
 
-
-How it works
------------
-
-You have:
-1. "Link-FROM" content types - We look for keywords into their text and replace them with links.
-2. "Link-TO" content types. (node-title = keyword).
-3. Glossify auto links from 1 to 2 using the settings you specify at admin/settings/glossify.
-
--- See the http://drupal.org/project/glossify page for an up to date and detailed intro.
--- See http://segments.at/documentation-for-glossify-internal-links-auto for the whole docs.
+-Glossify with taxonomy - links taxonomy terms appearing in content to their taxonomy term page. You
+ can select which taxonomy vocabularies to use as the source for the terms.
+ 
+-Glossify with content - links titles of content appearing in other content to their page. You can 
+ select which content types to use as the source for the terms.
 
 
-INSTALL
------------
-- download, enable and set up via admin/settings/glossify
-- make sure to enable the Glossify filter for your input formats via admin/settings/filters/list
+Installation
+------------
+- download and install like any other contributed module. See https://drupal.org/node/895232
+  for more detailed instructions.
+- navigate to admin/config/content/formats.
+- click 'configure' for a text format to which you would like to add a glossify filter.
+- enable the desired filter in the "Enabled filters" section.
+- check the desired settings in the "Filter settings" vertical tab.
 
 
-Autors and Sponsors
---------------
+Usage
+-----
+- nothing else to do, if a text field has this an input format with this filter enabled, the desired
+  terms will be converted into links automatically.
 
-Development of this module (1.0 release) was sponsored initially by leptree.net. (eafarris)
-- ea.Farris <eric@eafarris.com> - <http://drupal.org/user/812>
 
-From the middle of 2009 (2.0 and 2.5) the development was 
-further sponsored by http://segments.at/ (segments).
-- rsvelko - vladimir@segments.at - http://segments.at/
-
-And from August 2010 (3.0) the module was rewritten.
-The development was sponsored by http://segments.at/ (segments).
-- segments - office@segments.at - http://segments.at/
+Theming
+-------
+The module provides a theme function (theme_glossify_links), some basic css, and 2 icons to format 
+the links. Override and customize as desired. See https://drupal.org/node/457740 for more detailed
+instuctions.
