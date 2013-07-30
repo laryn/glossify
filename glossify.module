@@ -127,6 +127,8 @@ function _glossify_content_settings($form, $form_state, $filter, $format, $defau
 function _glossify_taxonomy_process($text, $filter, $format, $langcode, $cache, $cache_id) {
   //get terms
   $vocabs = array_filter($filter->settings['glossify_taxonomy_vocabs']);
+  if (!$vocabs) return $text;
+
   $result = db_query('SELECT tid, name FROM {taxonomy_term_data} WHERE vid IN (:vids)', array(':vids' => $vocabs));
   $terms = $result->fetchAllKeyed();
 
@@ -143,6 +145,8 @@ function _glossify_taxonomy_process($text, $filter, $format, $langcode, $cache, 
  */
 function _glossify_content_process($text, $filter, $format, $langcode, $cache, $cache_id) {
   $types = array_filter($filter->settings['glossify_content_types']);
+  if (!$types) return $text;
+
   $result = db_query('SELECT nid, title FROM {node} WHERE type IN (:types)', array(':types' => $types));
   $terms = $result->fetchAllKeyed();
 
