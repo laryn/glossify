@@ -15,8 +15,8 @@ function glossify_help($path, $arg) {
       $output .= '<p>' . t('The Glossify module provides filters that scan and parse content and replace terms in the text with links to their pages. It consists of 2 filters:') . '</p>';
 
       $items = array();
-      $items[] = t('Glossify with taxonomy - links taxonomy terms appearing in content to their taxonomy term page. You can select which taxonomy vocabularies to use as the source for the terms.');
-      $items[] = t('Glossify with content - links titles of content appearing in other content to their page. You can select which content types to use as the source for the terms.');
+      $items[] = t('Glossify with taxonomy - links taxonomy terms appearing in content to their taxonomy term page. You can select which taxonomy vocabularies to use as the source for the terms and whether or not the match is case sensitive..');
+      $items[] = t('Glossify with content - links titles of content appearing in other content to their page. You can select which content types to use as the source for the terms and whether or not the match is case sensitive..');
       $output .= theme('item_list', array('items' => $items, 'type' => 'ul'));
 
       $items = '';
@@ -28,7 +28,7 @@ function glossify_help($path, $arg) {
       $output .= theme('item_list', array('items' => $items, 'type' => 'ol'));
 
       $output .= '<h3>' . t('Theming') . '</h3>';
-      $output .= '<p>' . t('The module provides a theme function (theme_glossify_links), some basic css, and 2 icons to format the links. Override and customize as desired. See <a href="!url">Beginners guide to overriding themable output</a> for more detailed instuctions.', array('!url' => 'https://drupal.org/node/457740')) . '</p>';
+      $output .= '<p>' . t('The module provides a theme function (theme_glossify_links), some basic css, and 2 icons to format the links. Override and customize as desired. See <a href="!url">Beginners guide to overriding themable output</a> for more detailed instructions.', array('!url' => 'https://drupal.org/node/457740')) . '</p>';
 
       return $output;
   }
