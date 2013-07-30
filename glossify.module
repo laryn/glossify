@@ -22,7 +22,8 @@ function glossify_help($path, $arg) {
       $items = '';
       $items[] = t('Navigate to the <a href="!url">Text formats</a> configuration page. Click "configure" next to the text format you upon which you want to enable the Glossify filter.', array('!url' => '/admin/config/content/formats'));
       $items[] = t('Check the box for "Glossify with taxonomy" and/or "Glossify with content" under the list of filters in the "Enabled filters" section.');
-      $items[] = t('Check the boxes for the desired taxonomy vocabularies and/or content types you wish to ase the source of terms to link.');
+      $items[] = t('Check the boxes for the desired taxonomy vocabularies and/or content types you wish to use the source of terms to link.');
+      $items[] = t('Set any other options as desired.');
       $output .= '<h3>' . t('Configuration/Usage') . '</h3>';
       $output .= theme('item_list', array('items' => $items, 'type' => 'ol'));
 
@@ -45,6 +46,7 @@ function glossify_filter_info() {
     'settings callback' => '_glossify_taxonomy_settings',
     'default settings' => array(
       'glossify_taxonomy_vocabs' => array(),
+      'glossify_taxonomy_case_sensitivity' => FALSE,
     ),
   );
   $filters['glossify_content'] = array(
@@ -54,6 +56,7 @@ function glossify_filter_info() {
     'settings callback' => '_glossify_content_settings',
     'default settings' => array(
       'glossify_content_types' => array(),
+      'glossify_content_case_sensitivity' => FALSE,
     ),
   );
   return $filters;
@@ -73,6 +76,12 @@ function _glossify_taxonomy_settings($form, $form_state, $filter, $format, $defa
     $options[$vocab->vid] = $vocab->name;
   }
 
+  $settings['glossify_taxonomy_case_sensitivity'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Case sensitive'),
+    '#description' => t('Whether or not the match is case sensitive.'),
+    '#default_value' => $filter->settings['glossify_taxonomy_case_sensitivity'],
+  );
   $settings['glossify_taxonomy_vocabs'] = array(
     '#type' => 'checkboxes',
     '#title' => t('Taxonomy Vocabularies'),
@@ -96,6 +105,12 @@ function _glossify_content_settings($form, $form_state, $filter, $format, $defau
     $options[$type->type] = $type->name;
   }
 
+  $settings['glossify_content_case_sensitivity'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Case sensitive'),
+    '#description' => t('Whether or not the match is case sensitive.'),
+    '#default_value' => $filter->settings['glossify_content_case_sensitivity'],
+  );
   $settings['glossify_content_types'] = array(
     '#type' => 'checkboxes',
     '#title' => t('Content Types'),
@@ -116,7 +131,7 @@ function _glossify_taxonomy_process($text, $filter, $format, $langcode, $cache, 
   $terms = $result->fetchAllKeyed();
 
   if (count($terms) > 0) {
-    return _glossify_to_links($text, $terms, 'taxonomy');
+    return _glossify_to_links($text, $terms, 'taxonomy', $filter->settings['glossify_taxonomy_case_sensitivity']);
   }
   else {
     return $text;
@@ -132,7 +147,7 @@ function _glossify_content_process($text, $filter, $format, $langcode, $cache, $
   $terms = $result->fetchAllKeyed();
 
   if (count($terms) > 0) {
-    return _glossify_to_links($text, $terms, 'taxonomy');
+    return _glossify_to_links($text, $terms, 'content', $filter->settings['glossify_content_case_sensitivity']);
   }
   else {
     return $text;
@@ -153,7 +168,7 @@ function _glossify_content_process($text, $filter, $format, $langcode, $cache, $
  * @return
  *   The original HTML with the term string replaced by links.
  */
-function _glossify_to_links($text, $terms, $type) {
+function _glossify_to_links($text, $terms, $type, $case_sensitivity) {
 
   //create dom document
   $html_dom = filter_dom_load($text);
@@ -163,7 +178,7 @@ function _glossify_to_links($text, $terms, $type) {
 
   //transform terms into normalized search pattern and create urls
   foreach ($terms as $term_id => $term_name) {
-    $term_norm = preg_replace('/\s+/', ' ', strtoupper(trim($term_name)));
+    $term_norm = preg_replace('/\s+/', ' ', trim($term_name));
     $pattern[] = preg_replace('/ /', '\\s+', preg_quote($term_norm));
     if ($type == 'taxonomy') {
       $urls[$term_norm] = '/taxonomy/term/' . $term_id;
@@ -172,41 +187,45 @@ function _glossify_to_links($text, $terms, $type) {
       $urls[$term_norm] = '/node/' . $term_id;
     }
   }
-  $pattern  = '/\b(' . implode('|', $pattern) . ')\b/i';
+  $pattern  = '/\b(' . implode('|', $pattern) . ')\b/';
+  if (!$case_sensitivity) {
+    $pattern  .= 'i';
+  }
 
   $text_nodes = $xpath->query('//text()[not(ancestor::a)]');
   foreach ($text_nodes as $original_node) {
     $text     = $original_node->nodeValue;
     $hitcount = preg_match_all($pattern, $text, $matches, PREG_OFFSET_CAPTURE);
 
-    if ($hitcount == 0) continue;
+    if ($hitcount != 0) {
 
-    $offset   = 0;
-    $parent   = $original_node->parentNode;
-    $refnode  = $original_node->nextSibling;
+      $offset   = 0;
+      $parent   = $original_node->parentNode;
+      $refnode  = $original_node->nextSibling;
 
-    $parent->removeChild($original_node);
+      $parent->removeChild($original_node);
 
-    foreach ($matches[0] as $i => $match) {
-      $term_txt = $match[0];
-      $term_pos = $match[1];
-      $term_norm = preg_replace('/\s+/', ' ', strtoupper($term_txt));
+      foreach ($matches[0] as $i => $match) {
+        $term_txt = $match[0];
+        $term_pos = $match[1];
+        $term_norm = preg_replace('/\s+/', ' ', $term_txt);
 
-      // insert any text before the term instance
-      $prefix = substr($text, $offset, $term_pos - $offset);
-      $parent->insertBefore($html_dom->createTextNode($prefix), $refnode);
+        // insert any text before the term instance
+        $prefix = substr($text, $offset, $term_pos - $offset);
+        $parent->insertBefore($html_dom->createTextNode($prefix), $refnode);
 
-      // insert the actual term instance as a link
-      $link = $html_dom->createDocumentFragment();
-      $link->appendXML(theme('glossify_links', array( 'url' => $urls[$term_norm], 'text' => $term_txt)));
-      $parent->insertBefore($link, $refnode);
+        // insert the actual term instance as a link
+        $link = $html_dom->createDocumentFragment();
+        $link->appendXML(theme('glossify_links', array( 'url' => $urls[$term_norm], 'text' => $term_txt)));
+        $parent->insertBefore($link, $refnode);
 
-      $offset = $term_pos + strlen($term_txt);
+        $offset = $term_pos + strlen($term_txt);
 
-      // last match, append remaining text
-      if ($i == $hitcount - 1) {
-        $suffix = substr($text, $offset);
-        $parent->insertBefore($html_dom->createTextNode($suffix), $refnode);
+        // last match, append remaining text
+        if ($i == $hitcount - 1) {
+          $suffix = substr($text, $offset);
+          $parent->insertBefore($html_dom->createTextNode($suffix), $refnode);
+        }
       }
     }
   }
