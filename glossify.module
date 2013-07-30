@@ -47,6 +47,7 @@ function glossify_filter_info() {
     'default settings' => array(
       'glossify_taxonomy_vocabs' => array(),
       'glossify_taxonomy_case_sensitivity' => FALSE,
+      'glossify_taxonomy_first_only' => TRUE,
     ),
   );
   $filters['glossify_content'] = array(
@@ -57,6 +58,7 @@ function glossify_filter_info() {
     'default settings' => array(
       'glossify_content_types' => array(),
       'glossify_content_case_sensitivity' => FALSE,
+      'glossify_content_first_only' => TRUE,
     ),
   );
   return $filters;
@@ -81,6 +83,12 @@ function _glossify_taxonomy_settings($form, $form_state, $filter, $format, $defa
     '#title' => t('Case sensitive'),
     '#description' => t('Whether or not the match is case sensitive.'),
     '#default_value' => $filter->settings['glossify_taxonomy_case_sensitivity'],
+  );
+  $settings['glossify_taxonomy_first_only'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('First match only'),
+    '#description' => t('Match and link only the first occurance.'),
+    '#default_value' => $filter->settings['glossify_taxonomy_first_only'],
   );
   $settings['glossify_taxonomy_vocabs'] = array(
     '#type' => 'checkboxes',
@@ -111,6 +119,12 @@ function _glossify_content_settings($form, $form_state, $filter, $format, $defau
     '#description' => t('Whether or not the match is case sensitive.'),
     '#default_value' => $filter->settings['glossify_content_case_sensitivity'],
   );
+  $settings['glossify_content_first_only'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('First match only'),
+    '#description' => t('Match and link only the first occurance.'),
+    '#default_value' => $filter->settings['glossify_content_first_only'],
+  );
   $settings['glossify_content_types'] = array(
     '#type' => 'checkboxes',
     '#title' => t('Content Types'),
@@ -133,7 +147,7 @@ function _glossify_taxonomy_process($text, $filter, $format, $langcode, $cache, 
   $terms = $result->fetchAllKeyed();
 
   if (count($terms) > 0) {
-    return _glossify_to_links($text, $terms, 'taxonomy', $filter->settings['glossify_taxonomy_case_sensitivity']);
+    return _glossify_to_links($text, $terms, 'taxonomy', $filter->settings['glossify_taxonomy_case_sensitivity'], $filter->settings['glossify_taxonomy_first_only']);
   }
   else {
     return $text;
@@ -151,7 +165,7 @@ function _glossify_content_process($text, $filter, $format, $langcode, $cache, $
   $terms = $result->fetchAllKeyed();
 
   if (count($terms) > 0) {
-    return _glossify_to_links($text, $terms, 'content', $filter->settings['glossify_content_case_sensitivity']);
+    return _glossify_to_links($text, $terms, 'content', $filter->settings['glossify_content_case_sensitivity'], $filter->settings['glossify_content_first_only']);
   }
   else {
     return $text;
@@ -172,13 +186,14 @@ function _glossify_content_process($text, $filter, $format, $langcode, $cache, $
  * @return
  *   The original HTML with the term string replaced by links.
  */
-function _glossify_to_links($text, $terms, $type, $case_sensitivity) {
+function _glossify_to_links($text, $terms, $type, $case_sensitivity, $first_only) {
 
   //create dom document
   $html_dom = filter_dom_load($text);
   $xpath   = new DOMXPath($html_dom);
   $urls    = array();
   $pattern = array();
+  $matched = array();
 
   //transform terms into normalized search pattern and create urls
   foreach ($terms as $term_id => $term_name) {
@@ -220,7 +235,13 @@ function _glossify_to_links($text, $terms, $type, $case_sensitivity) {
 
         // insert the actual term instance as a link
         $link = $html_dom->createDocumentFragment();
-        $link->appendXML(theme('glossify_links', array( 'url' => $urls[strtolower($term_norm)], 'text' => $term_txt)));
+        if ($first_only && in_array($case_sensitivity ? $match[0] : strtolower($match[0]),$matched)) {
+          $link->appendXML($term_txt);
+        }
+        else {
+          $link->appendXML(theme('glossify_links', array( 'url' => $urls[strtolower($term_norm)], 'text' => $term_txt)));
+          $matched[] = ($case_sensitivity ? $match[0] : strtolower($match[0]));
+        }
         $parent->insertBefore($link, $refnode);
 
         $offset = $term_pos + strlen($term_txt);
