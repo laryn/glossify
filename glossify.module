@@ -15,8 +15,24 @@ function glossify_help($path, $arg) {
       $output .= '<p>' . t('The Glossify module provides filters that scan and parse content and replace terms in the text with links to their pages. It consists of 2 filters:') . '</p>';
 
       $items = array();
-      $items[] = t('Glossify with taxonomy - links taxonomy terms appearing in content to their taxonomy term page. You can select which taxonomy vocabularies to use as the source for the terms and whether or not the match is case sensitive..');
-      $items[] = t('Glossify with content - links titles of content appearing in other content to their page. You can select which content types to use as the source for the terms and whether or not the match is case sensitive..');
+      $items[] = array (
+        'data' => t('Glossify with taxonomy'),
+        'children' => array (
+           t('links taxonomy terms appearing in content to their taxonomy term page.'),
+           t('select which taxonomy vocabularies to use as the source for the terms.'),
+           t('indicate whether or not the match is case sensitive.'),
+           t('display the term definition as a tooltip while hovering the glossified link.'),
+        ),
+      );
+      $items[] = array (
+        'data' => t('Glossify with content'),
+        'children' => array (
+          t('links node titles of content appearing in other content to their node page'),
+          t('select which content types to use as the source for the terms.'),
+          t('indicate whether or not matching is case sensitive.'),
+          t('display the text from a selected field on the linked node as a tooltip while hovering the glossified link.'),
+        ),
+      );
       $output .= theme('item_list', array('items' => $items, 'type' => 'ul'));
 
       $items = '';
