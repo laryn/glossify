@@ -21,6 +21,7 @@ function glossify_help($path, $arg) {
            t('links taxonomy terms appearing in content to their taxonomy term page.'),
            t('select which taxonomy vocabularies to use as the source for the terms.'),
            t('indicate whether or not the match is case sensitive.'),
+           t('indicate whether or not every match should be linked or just the first occurrence.'),
            t('display the term definition as a tooltip while hovering the glossified link.'),
         ),
       );
@@ -30,6 +31,7 @@ function glossify_help($path, $arg) {
           t('links node titles of content appearing in other content to their node page'),
           t('select which content types to use as the source for the terms.'),
           t('indicate whether or not matching is case sensitive.'),
+          t('indicate whether or not every match should be linked or just the first occurrence.'),
           t('display the text from a selected field on the linked node as a tooltip while hovering the glossified link.'),
         ),
       );
