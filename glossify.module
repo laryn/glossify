@@ -258,7 +258,8 @@ function _glossify_to_links($text, $terms, $type, $case_sensitivity, $first_only
 
   //transform terms into normalized search pattern
   foreach ($terms as $term) {
-    $term_norm = preg_replace('/\s+/', ' ', trim($term->name_norm));
+    $term_norm = preg_replace('#/#', '\/',$term->name_norm);
+    $term_norm = preg_replace('/\s+/', ' ', trim($term_norm));
     $pattern[] = preg_replace('/ /', '\\s+', preg_quote($term_norm));
   }
   $pattern  = '/\b(' . implode('|', $pattern) . ')\b/';
