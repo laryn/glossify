@@ -195,7 +195,7 @@ function _glossify_taxonomy_process($text, $filter, $format, $langcode, $cache, 
   if (!$vocabs) return $text;
 
   //get terms
-  $result = db_query("SELECT tid, name, LOWER(name) AS name_norm, description AS tip, CONCAT('/taxonomy/term/', tid) AS url FROM {taxonomy_term_data} WHERE vid IN (:vids)", array(':vids' => $vocabs));
+  $result = db_query("SELECT tid AS id, name, LOWER(name) AS name_norm, description AS tip FROM {taxonomy_term_data} WHERE vid IN (:vids)", array(':vids' => $vocabs));
   $terms = $result->fetchAllAssoc('name_norm');
 
   //process text
@@ -217,11 +217,11 @@ function _glossify_content_process($text, $filter, $format, $langcode, $cache, $
 
   //get titles
   if (!$filter->settings['glossify_content_tooltips']) {
-    $result = db_query("SELECT nid, title AS name, LOWER(title) AS name_norm, CONCAT('/node/', nid) AS url FROM {node} WHERE status = 1 AND type IN (:types)", array(':types' => $types));
+    $result = db_query("SELECT nid AS id, title AS name, LOWER(title) AS name_norm FROM {node} WHERE status = 1 AND type IN (:types)", array(':types' => $types));
   }
   else {
     $field_name = $filter->settings['glossify_content_tooltip_field'];
-    $result = db_query("SELECT n.nid, n.title AS name, LOWER(title) AS name_norm, CONCAT('/node/', n.nid) AS url, f." . $field_name . "_value AS tip  FROM {node n} LEFT OUTER JOIN {field_data_" . $field_name . " f} ON n.vid = f.revision_id WHERE n.status = 1 AND n.type IN (:types) AND (f.delta = 0 OR f.delta IS NULL)", array(':types' => $types));
+    $result = db_query("SELECT n.nid AS id, n.title AS name, LOWER(title) AS name_norm, f." . $field_name . "_value AS tip  FROM {node n} LEFT OUTER JOIN {field_data_" . $field_name . " f} ON n.vid = f.revision_id WHERE n.status = 1 AND n.type IN (:types) AND (f.delta = 0 OR f.delta IS NULL)", array(':types' => $types));
   }
   $terms = $result->fetchAllAssoc('name_norm');
 
@@ -258,9 +258,9 @@ function _glossify_to_links($text, $terms, $type, $case_sensitivity, $first_only
 
   //transform terms into normalized search pattern
   foreach ($terms as $term) {
-    $term_norm = preg_replace('#/#', '\/',$term->name_norm);
-    $term_norm = preg_replace('/\s+/', ' ', trim($term_norm));
-    $pattern[] = preg_replace('/ /', '\\s+', preg_quote($term_norm));
+    $term_norm = preg_replace('/\s+/', ' ', preg_quote(trim($term->name_norm)));
+    $term_norm = preg_replace('#/#', '\/',$term_norm);
+    $pattern[] = preg_replace('/ /', '\\s+', $term_norm);
   }
   $pattern  = '/\b(' . implode('|', $pattern) . ')\b/';
   if (!$case_sensitivity) {
@@ -297,7 +297,7 @@ function _glossify_to_links($text, $terms, $type, $case_sensitivity, $first_only
         }
         else {
           $tip = $tooltips ? $terms[strtolower($term_txt)]->tip : '';
-          $link->appendXML(theme('glossify_links', array( 'url' => $terms[strtolower($term_txt)]->url, 'text' => $term_txt, 'tip' => $tip)));
+          $link->appendXML(theme('glossify_links', array('type' => $type, 'id' => $terms[strtolower($term_txt)]->id, 'text' => $term_txt, 'tip' => $tip)));
           $matched[] = ($case_sensitivity ? $match[0] : strtolower($match[0]));
         }
         $parent->insertBefore($link, $refnode);
@@ -323,7 +323,8 @@ function glossify_theme() {
   return array(
     'glossify_links' => array(
       'arguments' => array(
-        'url' => NULL,
+        'type' => NULL,
+        'id' => NULL,
         'text' => NULL,
         'tip' => NULL,
       ),
@@ -336,10 +337,18 @@ function glossify_theme() {
  */
 function theme_glossify_links($vars) {
   drupal_add_css(drupal_get_path('module', 'glossify') . '/glossify.css');
-  if ($vars['tip']) {
-    return '<a title="' . strip_tags($vars['tip']) . '" class="glossify-link" href="' . $vars['url'] . '">' . check_plain($vars['text']) . '<img src = "/' . drupal_get_path('module', 'glossify') . '/info.png" /></a>';
+
+  if ($vars['type'] == 'taxonomy') {
+    $path = 'taxonomy/term/' . $vars['id'];
   }
   else {
-    return '<a class="glossify-link" href="' . $vars['url'] . '">' . check_plain($vars['text']) . '<img src = "/' . drupal_get_path('module', 'glossify') . '/info.png" /></a>';
+    $path = 'node/' . $vars['id'];
+  }
+
+  if ($vars['tip']) {
+    return l($vars['text'], $path, array('attributes' => array('class' => array('glossify-link'), 'title' => $vars['tip']))) . '<i style="color: #ccc;padding-left: 2px;" class="icon icon-info-sign"></i>';
+  }
+  else {
+    return l($vars['text'], $path, array('attributes' => array ('class' => array('glossify-link')))) . '<i style="color: #ccc;padding-left: 2px;" class="icon icon-info-sign"></i>';
   }
 }
