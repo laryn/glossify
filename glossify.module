@@ -346,9 +346,9 @@ function theme_glossify_links($vars) {
   }
 
   if ($vars['tip']) {
-    return l($vars['text'], $path, array('attributes' => array('class' => array('glossify-link'), 'title' => $vars['tip']))) . '<i style="color: #ccc;padding-left: 2px;" class="icon icon-info-sign"></i>';
+    return l($vars['text'], $path, array('attributes' => array('class' => array('glossify-link'), 'title' => $vars['tip']))) . '<img src = "/' . drupal_get_path('module', 'glossify') . '/info.png" />';
   }
   else {
-    return l($vars['text'], $path, array('attributes' => array ('class' => array('glossify-link')))) . '<i style="color: #ccc;padding-left: 2px;" class="icon icon-info-sign"></i>';
+    return l($vars['text'], $path, array('attributes' => array ('class' => array('glossify-link')))) . '<img src = "/' . drupal_get_path('module', 'glossify') . '/info.png" />';
   }
 }
