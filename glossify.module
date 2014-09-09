@@ -346,9 +346,9 @@ function theme_glossify_links($vars) {
   }
 
   if ($vars['tip']) {
-    return l($vars['text'], $path, array('attributes' => array('class' => array('glossify-link'), 'title' => $vars['tip']))) . '<img src = "/' . drupal_get_path('module', 'glossify') . '/info.png" />';
+    return l(check_plain($vars['text']) . '<img src = "/' . drupal_get_path('module', 'glossify') . '/info.png" />', $path, array('html' => true, 'attributes' => array('class' => array('glossify-link'), 'title' => $vars['tip'])));
   }
   else {
-    return l($vars['text'], $path, array('attributes' => array ('class' => array('glossify-link')))) . '<img src = "/' . drupal_get_path('module', 'glossify') . '/info.png" />';
+    return l(check_plain($vars['text']) . '<img src = "/' . drupal_get_path('module', 'glossify') . '/info.png" />', $path, array('html' => true, 'attributes' => array ('class' => array('glossify-link'))));
   }
 }
