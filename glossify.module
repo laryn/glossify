@@ -195,7 +195,7 @@ function _glossify_taxonomy_process($text, $filter, $format, $langcode, $cache, 
   if (!$vocabs) return $text;
 
   //get terms
-  $result = db_query("SELECT tid AS id, name, LOWER(name) AS name_norm, description AS tip FROM {taxonomy_term_data} WHERE vid IN (:vids)", array(':vids' => $vocabs));
+  $result = db_query("SELECT tid AS id, name, LOWER(name) AS name_norm, description AS tip, format FROM {taxonomy_term_data} WHERE vid IN (:vids)", array(':vids' => $vocabs));
   $terms = $result->fetchAllAssoc('name_norm');
 
   //process text
@@ -221,7 +221,7 @@ function _glossify_content_process($text, $filter, $format, $langcode, $cache, $
   }
   else {
     $field_name = $filter->settings['glossify_content_tooltip_field'];
-    $result = db_query("SELECT n.nid AS id, n.title AS name, LOWER(title) AS name_norm, f." . $field_name . "_value AS tip  FROM {node n} LEFT OUTER JOIN {field_data_" . $field_name . " f} ON n.vid = f.revision_id WHERE n.status = 1 AND n.type IN (:types) AND (f.delta = 0 OR f.delta IS NULL)", array(':types' => $types));
+    $result = db_query("SELECT n.nid AS id, n.title AS name, LOWER(title) AS name_norm, f." . $field_name . "_value AS tip, f." . $field_name . "_format AS format FROM {node n} LEFT OUTER JOIN {field_data_" . $field_name . " f} ON n.vid = f.revision_id WHERE n.status = 1 AND n.type IN (:types) AND (f.delta = 0 OR f.delta IS NULL)", array(':types' => $types));
   }
   $terms = $result->fetchAllAssoc('name_norm');
 
@@ -296,7 +296,7 @@ function _glossify_to_links($text, $terms, $type, $case_sensitivity, $first_only
           $link->appendXML($term_txt);
         }
         else {
-          $tip = $tooltips ? $terms[strtolower($term_txt)]->tip : '';
+          $tip = $tooltips ? check_markup($terms[strtolower($term_txt)]->tip, $terms[strtolower($term_txt)]->format) : '';
           $link->appendXML(theme('glossify_links', array('type' => $type, 'id' => $terms[strtolower($term_txt)]->id, 'text' => $term_txt, 'tip' => $tip)));
           $matched[] = ($case_sensitivity ? $match[0] : strtolower($match[0]));
         }
