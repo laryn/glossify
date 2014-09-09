@@ -57,18 +57,20 @@ function glossify_help($path, $arg) {
  */
 function glossify_filter_info() {
   $filters = array();
-  $filters['glossify_taxonomy'] = array(
-    'title' => t('Glossify with taxonomy'),
-    'description' => t('Links taxonomy terms appearing in content to their taxonomy term page.'),
-    'process callback' => '_glossify_taxonomy_process',
-    'settings callback' => '_glossify_taxonomy_settings',
-    'default settings' => array(
-      'glossify_taxonomy_vocabs' => array(),
-      'glossify_taxonomy_case_sensitivity' => FALSE,
-      'glossify_taxonomy_first_only' => TRUE,
-      'glossify_taxonomy_tooltips' => FALSE,
-    ),
-  );
+  if (module_exists('taxonomy')) {
+    $filters['glossify_taxonomy'] = array(
+      'title' => t('Glossify with taxonomy'),
+      'description' => t('Links taxonomy terms appearing in content to their taxonomy term page.'),
+      'process callback' => '_glossify_taxonomy_process',
+      'settings callback' => '_glossify_taxonomy_settings',
+      'default settings' => array(
+        'glossify_taxonomy_vocabs' => array(),
+        'glossify_taxonomy_case_sensitivity' => FALSE,
+        'glossify_taxonomy_first_only' => TRUE,
+        'glossify_taxonomy_tooltips' => FALSE,
+      ),
+    );
+  }
   $filters['glossify_content'] = array(
     'title' => t('Glossify with content'),
     'description' => t('Links titles of content appearing in other content to their page.'),
