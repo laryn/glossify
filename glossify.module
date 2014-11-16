@@ -84,6 +84,11 @@ function glossify_filter_info() {
       'glossify_content_tooltip_field' => 'body',
     ),
   );
+  if (defined('FILTER_TYPE_TRANSFORM_REVERSIBLE')) {
+    $filters['glossify_taxonomy']['type'] = FILTER_TYPE_TRANSFORM_REVERSIBLE;
+    $filters['glossify_content']['type'] = FILTER_TYPE_TRANSFORM_REVERSIBLE;
+  }
+
   return $filters;
 }
 
