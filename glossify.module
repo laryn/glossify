@@ -360,9 +360,9 @@ function theme_glossify_links($vars) {
   }
 
   if ($vars['tip']) {
-    return l(check_plain($vars['text']) . '<img src = "' . $base_url . '/' . drupal_get_path('module', 'glossify') . '/info.png" />', $path, array('html' => true, 'attributes' => array('class' => array('glossify-link'), 'title' => $vars['tip'])));
+    return l(check_plain($vars['text']) . '<img alt="info-icon" src = "' . $base_url . '/' . drupal_get_path('module', 'glossify') . '/info.png" />', $path, array('html' => true, 'attributes' => array('class' => array('glossify-link'), 'title' => $vars['tip'])));
   }
   else {
-    return l(check_plain($vars['text']) . '<img src = "' . $base_url . '/' . drupal_get_path('module', 'glossify') . '/info.png" />', $path, array('html' => true, 'attributes' => array ('class' => array('glossify-link'))));
+    return l(check_plain($vars['text']) . '<img alt="info-icon" src = "' . $base_url . '/' . drupal_get_path('module', 'glossify') . '/info.png" />', $path, array('html' => true, 'attributes' => array ('class' => array('glossify-link'))));
   }
 }
