@@ -197,7 +197,7 @@ function _glossify_taxonomy_process($text, $filter, $format, $langcode, $cache, 
   if (!$vocabs) return $text;
 
   //get terms
-  $result = db_query("SELECT tid AS id, name, LOWER(name) AS name_norm, description AS tip, format FROM {taxonomy_term_data} WHERE vid IN (:vids)", array(':vids' => $vocabs));
+  $result = db_query("SELECT tid AS id, name, LOWER(name) AS name_norm, description AS tip, format FROM {taxonomy_term_data} WHERE vid IN (:vids) ORDER by CHAR_LENGTH(name) DESC", array(':vids' => $vocabs));
   $terms = $result->fetchAllAssoc('name_norm');
 
   //process text
