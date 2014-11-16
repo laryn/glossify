@@ -265,11 +265,11 @@ function _glossify_to_links($text, $terms, $type, $case_sensitivity, $first_only
 
   //transform terms into normalized search pattern
   foreach ($terms as $term) {
-    $term_norm = preg_replace('/\s+/', ' ', preg_quote(trim($term->name)));
-    $term_norm = preg_replace('#/#', '\/',$term_norm);
-    $pattern[] = preg_replace('/ /', '\\s+', $term_norm);
+    $term_norm = preg_replace('/\s+/u', ' ', preg_quote(trim($term->name)));
+    $term_norm = preg_replace('#/#u', '\/',$term_norm);
+    $pattern[] = preg_replace('/ /u', '\\s+', $term_norm);
   }
-  $pattern  = '/\b(' . implode('|', $pattern) . ')\b/';
+  $pattern  = '/\b(' . implode('|', $pattern) . ')\b/u';
   if (!$case_sensitivity) {
     $pattern .= 'i';
   }
@@ -291,7 +291,7 @@ function _glossify_to_links($text, $terms, $type, $case_sensitivity, $first_only
       foreach ($matches[0] as $i => $match) {
         $term_txt = $match[0];
         $term_pos = $match[1];
-        $term_norm = preg_replace('/\s+/', ' ', $term_txt);
+        $term_norm = preg_replace('/\s+/u', ' ', $term_txt);
 
         // insert any text before the term instance
         $prefix = substr($text, $offset, $term_pos - $offset);
