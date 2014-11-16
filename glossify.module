@@ -251,6 +251,11 @@ function _glossify_content_process($text, $filter, $format, $langcode, $cache, $
  *   The original HTML with the term string replaced by links.
  */
 function _glossify_to_links($text, $terms, $type, $case_sensitivity, $first_only, $tooltips) {
+  static $recursion_protection = FALSE;
+  if ($recursion_protection) {
+    return $text;
+  }
+  $recursion_protection = TRUE;
 
   //create dom document
   $html_dom = filter_dom_load($text);
@@ -314,6 +319,7 @@ function _glossify_to_links($text, $terms, $type, $case_sensitivity, $first_only
       }
     }
   }
+  $recursion_protection = FALSE;
 
   return filter_dom_serialize($html_dom);
 }
