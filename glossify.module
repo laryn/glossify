@@ -37,7 +37,7 @@ function glossify_help($path, $arg) {
       );
       $output .= theme('item_list', array('items' => $items, 'type' => 'ul'));
 
-      $items = '';
+      $items = array();
       $items[] = t('Navigate to the <a href="!url">Text formats</a> configuration page. Click "configure" next to the text format you upon which you want to enable the Glossify filter.', array('!url' => '/admin/config/content/formats'));
       $items[] = t('Check the box for "Glossify with taxonomy" and/or "Glossify with content" under the list of filters in the "Enabled filters" section.');
       $items[] = t('Check the boxes for the desired taxonomy vocabularies and/or content types you wish to use the source of terms to link.');
