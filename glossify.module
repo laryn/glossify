@@ -228,7 +228,7 @@ function _glossify_content_process($text, $filter, $format, $langcode, $cache, $
   }
   else {
     $field_name = $filter->settings['glossify_content_tooltip_field'];
-    $result = db_query("SELECT n.nid AS id, n.title AS name, LOWER(title) AS name_norm, f." . $field_name . "_value AS tip, f." . $field_name . "_format AS format FROM {node n} LEFT OUTER JOIN {field_data_" . $field_name . " f} ON n.vid = f.revision_id WHERE n.status = 1 AND n.type IN (:types) AND (f.delta = 0 OR f.delta IS NULL)", array(':types' => $types));
+    $result = db_query("SELECT n.nid AS id, n.title AS name, LOWER(title) AS name_norm, f." . $field_name . "_value AS tip, f." . $field_name . "_format AS format FROM {node} n LEFT OUTER JOIN {field_data_" . $field_name . "} f ON n.vid = f.revision_id WHERE n.status = 1 AND n.type IN (:types) AND (f.delta = 0 OR f.delta IS NULL)", array(':types' => $types));
   }
   $terms = $result->fetchAllAssoc('name_norm');
 
