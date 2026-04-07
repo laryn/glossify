@@ -1,0 +1,17 @@
+.glossify-link {
+  display: inline-flex;
+  align-items: center;
+}
+
+.glossify-link::after {
+  content: "";
+  mask-image: var(--icon-info-fill);
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  background-color: currentColor;
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-inline: 0.125em;
+  vertical-align: middle;
+}

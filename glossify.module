@@ -1,56 +1,8 @@
 <?php
-
 /**
  * @file
  * Glossify module.
  */
-
-/**
- * Implements hook_help().
- */
-function glossify_help($path, $arg) {
-  switch ($path) {
-    case 'admin/help#glossify':
-      $output = '<h3>' . t('About') . '</h3>';
-      $output .= '<p>' . t('The Glossify module provides filters that scan and parse content and replace terms in the text with links to their pages. It consists of 2 filters:') . '</p>';
-
-      $items = array();
-      $items[] = array (
-        'data' => t('Glossify with taxonomy'),
-        'children' => array (
-           t('links taxonomy terms appearing in content to their taxonomy term page.'),
-           t('select which taxonomy vocabularies to use as the source for the terms.'),
-           t('indicate whether or not the match is case sensitive.'),
-           t('indicate whether or not every match should be linked or just the first occurrence.'),
-           t('display the term definition as a tooltip while hovering the glossified link.'),
-        ),
-      );
-      $items[] = array (
-        'data' => t('Glossify with content'),
-        'children' => array (
-          t('links node titles of content appearing in other content to their node page'),
-          t('select which content types to use as the source for the terms.'),
-          t('indicate whether or not matching is case sensitive.'),
-          t('indicate whether or not every match should be linked or just the first occurrence.'),
-          t('display the text from a selected field on the linked node as a tooltip while hovering the glossified link.'),
-        ),
-      );
-      $output .= theme('item_list', array('items' => $items, 'type' => 'ul'));
-
-      $items = array();
-      $items[] = t('Navigate to the <a href="!url">Text formats</a> configuration page. Click "configure" next to the text format you upon which you want to enable the Glossify filter.', array('!url' => '/admin/config/content/formats'));
-      $items[] = t('Check the box for "Glossify with taxonomy" and/or "Glossify with content" under the list of filters in the "Enabled filters" section.');
-      $items[] = t('Check the boxes for the desired taxonomy vocabularies and/or content types you wish to use the source of terms to link.');
-      $items[] = t('Set any other options as desired.');
-      $output .= '<h3>' . t('Configuration/Usage') . '</h3>';
-      $output .= theme('item_list', array('items' => $items, 'type' => 'ol'));
-
-      $output .= '<h3>' . t('Theming') . '</h3>';
-      $output .= '<p>' . t('The module provides a theme function (theme_glossify_links), some basic css, and 2 icons to format the links. Override and customize as desired. See <a href="!url">Beginners guide to overriding themable output</a> for more detailed instructions.', array('!url' => 'https://drupal.org/node/457740')) . '</p>';
-
-      return $output;
-  }
-}
 
 /**
  * Implements hook_filter_info().
@@ -95,12 +47,11 @@ function glossify_filter_info() {
 /**
  * The settings for configuring the glossify taxonomy filter.
  */
-function _glossify_taxonomy_settings($form, $form_state, $filter, $format, $defaults) {
-  $filter->settings += $defaults;
+function _glossify_taxonomy_settings($form, $form_state, $filter, $format) {
   $vocabs = array();
 
   foreach (taxonomy_get_vocabularies() as $vocab) {
-    $vocabs[$vocab->vid] = $vocab->name;
+    $vocabs[$vocab->machine_name] = $vocab->name;
   }
 
   $settings['glossify_taxonomy_case_sensitivity'] = array(
@@ -124,7 +75,7 @@ function _glossify_taxonomy_settings($form, $form_state, $filter, $format, $defa
   $settings['glossify_taxonomy_vocabs'] = array(
     '#type' => 'checkboxes',
     '#title' => t('Taxonomy vocabularies'),
-    '#description' => t('Select the taxonomy vocabularies who\'s terms should be linked to their term page.'),
+    '#description' => t('Select the taxonomy vocabularies whose terms should be linked to their term page.'),
     '#options' => $vocabs,
     '#default_value' => $filter->settings['glossify_taxonomy_vocabs'],
   );
@@ -134,18 +85,17 @@ function _glossify_taxonomy_settings($form, $form_state, $filter, $format, $defa
 /**
  * The settings for configuring the glossify content filter.
  */
-function _glossify_content_settings($form, $form_state, $filter, $format, $defaults) {
-  $filter->settings += $defaults;
+function _glossify_content_settings($form, $form_state, $filter, $format) {
   $types = array();
   $fields = array();
 
-  // get all node types
+  // Get all node types.
   foreach (node_type_get_types() as $type) {
     $types[$type->type] = $type->name;
   }
   ksort($types);
 
-  //get all fields that appear on node bundles
+  // Get all fields that appear on node bundles.
   foreach (field_info_fields() as $field) {
     if (isset($field['bundles']['node'])) {
       $fields[$field['field_name']] = $field['field_name'];
@@ -186,7 +136,7 @@ function _glossify_content_settings($form, $form_state, $filter, $format, $defau
   $settings['glossify_content_types'] = array(
     '#type' => 'checkboxes',
     '#title' => t('Content types'),
-    '#description' => t('Select the content types who\'s titles should be linked to their content page.'),
+    '#description' => t('Select the content types whose titles should be linked to their content page.'),
     '#options' => $types,
     '#default_value' => $filter->settings['glossify_content_types'],
   );
@@ -197,15 +147,15 @@ function _glossify_content_settings($form, $form_state, $filter, $format, $defau
  * Taxonomy filter process callback for the glossify filter.
  */
 function _glossify_taxonomy_process($text, $filter, $format, $langcode, $cache, $cache_id) {
-  //get vocabularies
+  // Get vocabularies.
   $vocabs = array_filter($filter->settings['glossify_taxonomy_vocabs']);
   if (!$vocabs) return $text;
 
-  //get terms
-  $result = db_query("SELECT tid AS id, name, LOWER(name) AS name_norm, description AS tip, format FROM {taxonomy_term_data} WHERE vid IN (:vids) ORDER by CHAR_LENGTH(name) DESC", array(':vids' => $vocabs));
+  // Get terms.
+  $result = db_query("SELECT tid AS id, name, LOWER(name) AS name_norm, description AS tip, format FROM {taxonomy_term_data} WHERE vocabulary IN (:vocabularies) ORDER by CHAR_LENGTH(name) DESC", array(':vocabularies' => $vocabs));
   $terms = $result->fetchAllAssoc('name_norm');
 
-  //process text
+  // Process text.
   if (count($terms) > 0) {
     return _glossify_to_links($text, $terms, 'taxonomy', $filter->settings['glossify_taxonomy_case_sensitivity'], $filter->settings['glossify_taxonomy_first_only'], $filter->settings['glossify_taxonomy_tooltips']);
   }
@@ -218,11 +168,11 @@ function _glossify_taxonomy_process($text, $filter, $format, $langcode, $cache, 
  * Content filter process callback for the glossify filter.
  */
 function _glossify_content_process($text, $filter, $format, $langcode, $cache, $cache_id) {
-  //get content types
+  // Get content types.
   $types = array_filter($filter->settings['glossify_content_types']);
   if (!$types) return $text;
 
-  //get titles
+  // Get titles.
   if (!$filter->settings['glossify_content_tooltips']) {
     $result = db_query("SELECT nid AS id, title AS name, LOWER(title) AS name_norm FROM {node} WHERE status = 1 AND type IN (:types)", array(':types' => $types));
   }
@@ -232,7 +182,7 @@ function _glossify_content_process($text, $filter, $format, $langcode, $cache, $
   }
   $terms = $result->fetchAllAssoc('name_norm');
 
-  //process text
+  // Process text.
   if (count($terms) > 0) {
     return _glossify_to_links($text, $terms, 'content', $filter->settings['glossify_content_case_sensitivity'], $filter->settings['glossify_content_first_only'], $filter->settings['glossify_content_tooltips']);
   }
@@ -262,16 +212,16 @@ function _glossify_to_links($text, $terms, $type, $case_sensitivity, $first_only
   }
   $recursion_protection = TRUE;
 
-  //create dom document
+  // Create dom document.
   $html_dom = filter_dom_load($text);
   $xpath = new DOMXPath($html_dom);
   $pattern = array();
   $matched = array();
 
-  //transform terms into normalized search pattern
+  // Transform terms into normalized search pattern.
   foreach ($terms as $term) {
     $term_norm = preg_replace('/\s+/u', ' ', preg_quote(trim($term->name)));
-    $term_norm = preg_replace('#/#u', '\/',$term_norm);
+    $term_norm = preg_replace('#/#u', '\/', $term_norm);
     $pattern[] = preg_replace('/ /u', '\\s+', $term_norm);
   }
   $pattern  = '/\b(' . implode('|', $pattern) . ')\b/u';
@@ -279,7 +229,7 @@ function _glossify_to_links($text, $terms, $type, $case_sensitivity, $first_only
     $pattern .= 'i';
   }
 
-  //process HTML
+  // Process HTML.
   $text_nodes = $xpath->query('//text()[not(ancestor::a)]');
   foreach ($text_nodes as $original_node) {
     $text = $original_node->nodeValue;
@@ -298,25 +248,25 @@ function _glossify_to_links($text, $terms, $type, $case_sensitivity, $first_only
         $term_pos = $match[1];
         $term_norm = preg_replace('/\s+/u', ' ', $term_txt);
 
-        // insert any text before the term instance
+        // Insert any text before the term instance.
         $prefix = substr($text, $offset, $term_pos - $offset);
         $parent->insertBefore($html_dom->createTextNode($prefix), $refnode);
 
-        // insert the actual term instance as a link
+        // Insert the actual term instance as a link.
         $link = $html_dom->createDocumentFragment();
-        if ($first_only && in_array($case_sensitivity ? $match[0] : drupal_strtolower($match[0]), $matched)) {
+        if ($first_only && in_array($case_sensitivity ? $match[0] : backdrop_strtolower($match[0]), $matched)) {
           $link->appendXML($term_txt);
         }
         else {
-          $tip = $tooltips ? check_markup($terms[drupal_strtolower($term_norm)]->tip, $terms[drupal_strtolower($term_norm)]->format) : '';
-          $link->appendXML(theme('glossify_links', array('type' => $type, 'id' => $terms[drupal_strtolower($term_norm)]->id, 'text' => $term_txt, 'tip' => $tip)));
-          $matched[] = ($case_sensitivity ? $match[0] : drupal_strtolower($match[0]));
+          $tip = $tooltips ? check_markup($terms[backdrop_strtolower($term_norm)]->tip, $terms[backdrop_strtolower($term_norm)]->format) : '';
+          $link->appendXML(theme('glossify_links', array('type' => $type, 'id' => $terms[backdrop_strtolower($term_norm)]->id, 'text' => $term_txt, 'tip' => $tip)));
+          $matched[] = ($case_sensitivity ? $match[0] : backdrop_strtolower($match[0]));
         }
         $parent->insertBefore($link, $refnode);
 
         $offset = $term_pos + strlen($term_txt);
 
-        // last match, append remaining text
+        // Last match, append remaining text.
         if ($i == $hitcount - 1) {
           $suffix = substr($text, $offset);
           $parent->insertBefore($html_dom->createTextNode($suffix), $refnode);
@@ -332,7 +282,7 @@ function _glossify_to_links($text, $terms, $type, $case_sensitivity, $first_only
 /**
  * Implements hook_theme().
  */
-function glossify_theme() {
+function glossify_theme($existing, $type, $theme, $path) {
   return array(
     'glossify_links' => array(
       'arguments' => array(
@@ -340,6 +290,14 @@ function glossify_theme() {
         'id' => NULL,
         'text' => NULL,
         'tip' => NULL,
+      ),
+      'attached' => array(
+        'css' => array(
+          $path . '/css/glossify.css' => array(),
+        ),
+        'icons' => array(
+          'info-fill' => array(),
+        ),
       ),
     ),
   );
@@ -349,20 +307,25 @@ function glossify_theme() {
  * Render a glossify link.
  */
 function theme_glossify_links($vars) {
-  global $base_url;
-  drupal_add_css(drupal_get_path('module', 'glossify') . '/glossify.css');
-
+  global $language;
   if ($vars['type'] == 'taxonomy') {
     $path = 'taxonomy/term/' . $vars['id'];
   }
   else {
     $path = 'node/' . $vars['id'];
   }
+  $path = url($path, array('absolute' => TRUE, 'language' => $language));
+  $tip_prop = $vars['tip'] ? " title='" . $vars['tip'] . "'" : '';
+  $link_html = "<a href='$path' class='glossify-link'$tip_prop>" . check_plain($vars['text']) . "</a>";
 
-  if ($vars['tip']) {
-    return l(check_plain($vars['text']) . '<img alt="info-icon" src = "' . $base_url . '/' . drupal_get_path('module', 'glossify') . '/info.png" />', $path, array('html' => true, 'attributes' => array('class' => array('glossify-link'), 'title' => $vars['tip'])));
-  }
-  else {
-    return l(check_plain($vars['text']) . '<img alt="info-icon" src = "' . $base_url . '/' . drupal_get_path('module', 'glossify') . '/info.png" />', $path, array('html' => true, 'attributes' => array ('class' => array('glossify-link'))));
-  }
+  return $link_html;
+}
+
+/**
+ * Implements hook_preprocess_page().
+ */
+function glossify_preprocess_page(&$variables) {
+  backdrop_add_icons(array(
+    'info-fill',
+  ));
 }
